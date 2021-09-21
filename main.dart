@@ -1,25 +1,27 @@
 import 'package:flutter/material.dart';
+import 'note_page.dart';
 
 void main() {
-  runApp(MyApp());
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
-  // This widget is the root of your application.
+  const MyApp({Key? key}) : super(key: key);
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'My Notes Demo',
+      title: 'My Notes',
       theme: ThemeData(
-        primarySwatch: Colors.deepOrange,
+        primarySwatch: Colors.blueGrey,
       ),
-      home: MyHomePage(title: 'My Notes'),
+      home: const MyHomePage(title: 'My Notes'),
     );
   }
 }
 
 class MyHomePage extends StatefulWidget {
-  MyHomePage({Key? key, required this.title}) : super(key: key);
+  const MyHomePage({Key? key, required this.title}) : super(key: key);
 
   final String title;
 
@@ -28,41 +30,65 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
 
-  void _incrementCounter() {
+  int noteCounter = 1;
+  var noteList = [];
+
+  void incrementNoteCounter() {
     setState(() {
-      _counter++;
+      noteCounter++;
     });
   }
 
   @override
   Widget build(BuildContext context) {
-
     return Scaffold(
       appBar: AppBar(
-
-        title: Text(widget.title),
+        title: Center(child: Text(widget.title)),
       ),
-      body: Center(
-
-        child: Column(
-
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            Text(
-              'You have pushed the button this many times:',
+      body: ListView.builder(
+        itemCount: noteList.length,
+        itemBuilder: (BuildContext context, int index) {
+          return ListTile(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => NotePage(noteList[index]['title'])),
+              );
+            },
+            title: Container(
+              height: 150,
+              margin: EdgeInsets.only(left: 10, right: 10),
+              child: Row(
+                children: [
+                  Column(
+                    children: [
+                      SizedBox(
+                        width: 100,
+                        height: 100,
+                        child: Image(
+                          image: NetworkImage(noteList[index]['image']),
+                        ),
+                      ),
+                      Text(noteList[index]['title']),
+                    ]
+                  ),
+                ],
+              ),
             ),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headline4,
-            ),
-          ],
-        ),
+          );
+        },
+
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
+        onPressed: () {
+          var note = {
+            'image' : 'https://images.squarespace-cdn.com/content/v1/59aeaca4197aeadddeef26f8/1539332634579-K6JZ3B79E3R657I2C090/Logo+for+Standard+Notes.png?format=1000w',
+            'title' : 'Note' + noteCounter.toString(),
+          };
+          noteList.add(note);
+          incrementNoteCounter();
+        },
         child: Icon(Icons.add),
       ), // This trailing comma makes auto-formatting nicer for build methods.
     );
