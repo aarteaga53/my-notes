@@ -1,5 +1,13 @@
+
+import 'dart:io';
+
+import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:mynotes/take_picture_page.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'note_page.dart';
+
 
 void main() {
   runApp(const MyApp());
@@ -34,6 +42,8 @@ class _MyHomePageState extends State<MyHomePage> {
   int noteCounter = 1;
   var noteList = [];
 
+  
+
   void incrementNoteCounter() {
     setState(() {
       noteCounter++;
@@ -56,20 +66,25 @@ class _MyHomePageState extends State<MyHomePage> {
                 MaterialPageRoute(builder: (context) => NotePage(noteList[index]['title'])),
               );
             },
+            onLongPress: () {
+
+            },
             title: Container(
-              height: 150,
-              margin: EdgeInsets.only(left: 10, right: 10),
+              height: 100,
+              margin: const EdgeInsets.only(left: 10, right: 10),
               child: Row(
                 children: [
+                  SizedBox(
+                    width: 75,
+                    height: 100,
+                    child: Image(
+                      image: FileImage(File(noteList[index]['image'])),
+                    ),
+                  ),
                   Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      SizedBox(
-                        width: 100,
-                        height: 100,
-                        child: Image(
-                          image: NetworkImage(noteList[index]['image']),
-                        ),
-                      ),
                       Text(noteList[index]['title']),
                     ]
                   ),
@@ -81,15 +96,32 @@ class _MyHomePageState extends State<MyHomePage> {
 
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          var note = {
-            'image' : 'https://images.squarespace-cdn.com/content/v1/59aeaca4197aeadddeef26f8/1539332634579-K6JZ3B79E3R657I2C090/Logo+for+Standard+Notes.png?format=1000w',
-            'title' : 'Note' + noteCounter.toString(),
-          };
-          noteList.add(note);
-          incrementNoteCounter();
-        },
-        child: Icon(Icons.add),
+        onPressed: () async {
+
+           final cameras = await availableCameras();
+           final firstCamera = cameras.first;
+
+           final result = await Navigator.push(
+               context,
+               MaterialPageRoute(builder: (context) => TakePictureScreen(camera: firstCamera))
+           );
+           final picturePath = File(result);
+
+           var filename = 'note' + noteCounter.toString() + '.jpeg';
+           final directory = await getApplicationDocumentsDirectory();
+           final path = directory.path;
+
+           final file = File('$path/' + filename);
+           file.writeAsBytesSync(picturePath.readAsBytesSync());
+
+           var note = {
+             'image' : '$path/note' + noteCounter.toString() + '.jpeg',
+             'title' : 'Note' + noteCounter.toString(),
+           };
+           noteList.add(note);
+           incrementNoteCounter();
+         },
+         child: const Icon(Icons.photo),
       ), // This trailing comma makes auto-formatting nicer for build methods.
     );
   }
