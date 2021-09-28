@@ -57,55 +57,59 @@ class _MyHomePageState extends State<MyHomePage> {
       appBar: AppBar(
         title: Center(child: Text(widget.title)),
       ),
-      body: ListView.builder(
+      body: GridView.builder(
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 3,
+          crossAxisSpacing: 5,
+          mainAxisSpacing: 10,
+        ),
         itemCount: noteList.length,
         itemBuilder: (BuildContext context, int index) {
-          return ListTile(
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => NotePage(noteList[index])),
-              );
-            },
-            onLongPress: () {
-
-            },
-            title: Container(
-              height: 100,
-              margin: const EdgeInsets.only(left: 10, right: 10),
-              child: Row(
-                children: [
-                  Container(
-                    width: 75,
-                    height: 75,
-                    margin: const EdgeInsets.only(right: 10),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(10),
-                      image: DecorationImage(
-                        fit: BoxFit.cover,
-                        image: FileImage(File(noteList[index]['image'])),
+          return Column(
+            children: [
+              ListTile(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => NotePage(noteList[index])),
+                  );
+                },
+                title: Column(
+                  children: [
+                    Container(
+                      width: 100,
+                      height: 100,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(10),
+                        image: DecorationImage(
+                          fit: BoxFit.cover,
+                          image: FileImage(File(noteList[index]['image'])),
+                        ),
                       ),
                     ),
-                  ),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Text(noteList[index]['title']),
-                      // IconButton(
-                      //   onPressed: () async {
-                      //     final file = File(noteList[index]['image']);
-                      //     await file.delete();
-                      //     noteList.removeAt(noteCounter-2);
-                      //     decrementNoteCounter();
-                      //   },
-                      //   icon: const Icon(Icons.delete),
-                      // ),
-                    ]
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
+              Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Text(noteList[index]['title']),
+                    // IconButton(
+                    //   onPressed: () async {
+                    //     final directory = Directory(noteList[index]['path']);
+                    //     await directory.delete(recursive: true);
+                    //     noteList.removeAt(index);
+                    //     setState(() {
+                    //
+                    //     });
+                    //     //decrementNoteCounter();
+                    //   },
+                    //   icon: const Icon(Icons.delete),
+                    // ),
+                  ]
+              ),
+            ],
           );
         },
 
