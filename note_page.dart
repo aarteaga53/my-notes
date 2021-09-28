@@ -1,14 +1,15 @@
 import 'dart:io';
-
+import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:mynotes/take_picture_page.dart';
 import 'package:path_provider/path_provider.dart';
 
 class NotePage extends StatefulWidget {
   //const NotePage({Key? key}) : super(key: key);
 
-  String title;
+  var notePath;
 
-  NotePage(this.title, {Key? key}) : super(key: key);
+  NotePage(this.notePath, {Key? key}) : super(key: key);
 
   @override
   _NotePageState createState() => _NotePageState();
@@ -16,23 +17,21 @@ class NotePage extends StatefulWidget {
 
 class _NotePageState extends State<NotePage> {
 
-  String notePath = "";
+  int noteCounter = 2;
+  PageController pageController = PageController();
+  var notes = [];
 
   @override
   void initState() {
     super.initState();
-    loadNotePath().then((path) {
-      notePath = path;
-      setState(() {
 
-      });
-    });
+    notes.add(widget.notePath['image']);
   }
 
-  Future<String> loadNotePath() async {
-    final directory = await getApplicationDocumentsDirectory();
-    final path = directory.path;
-    return '$path/' + widget.title + '.jpeg';
+  void incrementNoteCounter() {
+    setState(() {
+      noteCounter++;
+    });
   }
 
   @override
@@ -40,7 +39,7 @@ class _NotePageState extends State<NotePage> {
     return Scaffold(
       appBar: AppBar(
         title: Center(
-            child: Text(widget.title)
+            child: Text(widget.notePath['title'])
         ),
         actions: [
           IconButton(
@@ -56,12 +55,18 @@ class _NotePageState extends State<NotePage> {
         children: [
           Expanded(
             flex: 90,
-            child: SizedBox(
-
-              child: Image(
-                  image: FileImage(File(notePath)),
-                fit: BoxFit.cover,
-              ),
+            child: PageView.builder(
+              controller: pageController,
+              itemCount: notes.length,
+              itemBuilder: (BuildContext context, int index) {
+                return SizedBox(
+                  child: Image(
+                    image: FileImage(File(notes[index])),
+                    //image: FileImage(File(widget.notePath['image'])),
+                    fit: BoxFit.cover,
+                  ),
+                );
+              },
             ),
           ),
           Expanded(
@@ -69,8 +74,22 @@ class _NotePageState extends State<NotePage> {
             child: Row(
               children: [
                 IconButton(
-                  onPressed: () {
+                  onPressed: () async {
+                    final cameras = await availableCameras();
+                    final firstCamera = cameras.first;
 
+                    final result = await Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => TakePictureScreen(camera: firstCamera))
+                    );
+                    final picture = File(result);
+
+                    var filename = widget.notePath['path'] + '/Note' + noteCounter.toString() + '.jpeg';
+                    final file = File(filename);
+                    file.writeAsBytesSync(picture.readAsBytesSync());
+
+                    notes.add(filename);
+                    incrementNoteCounter();
                   },
                   icon: const Icon(Icons.camera_alt),
                 ),
