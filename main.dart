@@ -23,7 +23,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'My Notes',
       theme: ThemeData(
-        primaryColor: Colors.blueGrey,
+        primarySwatch: Colors.blueGrey,
       ),
       darkTheme: ThemeData.dark(),
       themeMode: ThemeMode.system,
@@ -51,11 +51,13 @@ class _MyHomePageState extends State<MyHomePage> {
     super.initState();
     setState(() {
       loadNoteCounter();
+      loadNoteList();
     });
   }
 
   void loadNoteCounter() async {
     final prefs = await SharedPreferences.getInstance();
+    //prefs.remove('noteCounter');
     noteCounter = prefs.getInt('noteCounter') ?? 1;
   }
 
@@ -70,25 +72,53 @@ class _MyHomePageState extends State<MyHomePage> {
 
   Future<String> getFilepath() async {
     final directory = await getApplicationDocumentsDirectory();
-    final path = directory.path;
-    return '$path/Note' + noteCounter.toString();
+    return directory.path;
   }
 
-  void createNote(String filepath) {
+  void createNote(String filepath, String filename) {
     var note = {
-      'image' : filepath,
+      'image' : filename,
       'title' : 'Note' + noteCounter.toString(),
     };
 
     noteList.add(note);
+
+    final file = File('$filepath/noteList.txt');
+    file.writeAsStringSync('Note List\n');
+    for (var element in noteList) {
+      file.writeAsStringSync(element['image'] + '\n', mode: FileMode.append);
+      file.writeAsStringSync(element['title'] + '\n', mode: FileMode.append);
+    }
+    //file.delete();
+  }
+
+  void loadNoteList() async {
+    String filepath = await getFilepath();
+    if(File('$filepath/noteList.txt').existsSync()) {
+      final file = File('$filepath/noteList.txt');
+
+      List<String> lines = file.readAsLinesSync();
+
+      for(int i = 1; i < lines.length - 1; i++) {
+        var note = {
+          'image' : lines[i],
+          'title' : lines[++i],
+        };
+        noteList.add(note);
+      }
+    }
+
   }
 
   void createPDF(var pdf, File picture) {
     final image = pw.MemoryImage(picture.readAsBytesSync());
     pdf.addPage(pw.Page(
-        pageFormat: PdfPageFormat.undefined,
+        pageFormat: PdfPageFormat.a4,
         build: (pw.Context context) {
-          return pw.Center(child: pw.Image(image));
+          return pw.FullPage(
+            ignoreMargins: true,
+              child: pw.Image(image, fit: pw.BoxFit.cover)
+          );
         }));
   }
 
@@ -123,8 +153,12 @@ class _MyHomePageState extends State<MyHomePage> {
                     SizedBox(
                       width: 100,
                       height: 100,
-                      child: IgnorePointer(child: SfPdfViewer.file(File(noteList[index]['image']))),
-
+                      child: IgnorePointer(
+                        child: SfPdfViewer.file(
+                          File(noteList[index]['image']),
+                          canShowScrollHead: false,
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -153,20 +187,22 @@ class _MyHomePageState extends State<MyHomePage> {
                   context,
                   MaterialPageRoute(builder: (context) => TakePictureScreen(camera: firstCamera))
               );
-              
+
               final picture = File(result);
               var pdf = pw.Document();
               createPDF(pdf, picture);
 
               String filepath = await getFilepath();
-              final file = File(filepath);
+              String filename = filepath + '/Note' + noteCounter.toString() + '.pdf';
+              final file = File(filename);
               file.writeAsBytes(await pdf.save());
 
-              createNote(filepath);
+              createNote(filepath, filename);
               incrementNoteCounter();
             },
             label: 'Take Picture',
             child: const Icon(Icons.add_a_photo),
+            backgroundColor: Colors.lightBlueAccent,
           ),
           SpeedDialChild(
             onTap: () async {
@@ -179,14 +215,16 @@ class _MyHomePageState extends State<MyHomePage> {
               createPDF(pdf, imageFile);
 
               String filepath = await getFilepath();
-              final file = File(filepath);
+              String filename = filepath + '/Note' + noteCounter.toString() + '.pdf';
+              final file = File(filename);
               file.writeAsBytes(await pdf.save());
 
-              createNote(filepath);
+              createNote(filepath, filename);
               incrementNoteCounter();
             },
             label: 'Add Image',
             child: const Icon(Icons.add_photo_alternate),
+            backgroundColor: Colors.lightBlueAccent,
           ),
           SpeedDialChild(
             onTap: () {
@@ -194,6 +232,7 @@ class _MyHomePageState extends State<MyHomePage> {
             },
             label: 'Create Folder',
             child: const Icon(Icons.create_new_folder),
+            backgroundColor: Colors.lightBlueAccent,
           )
         ],
       ),// This trailing comma makes auto-formatting nicer for build methods.
