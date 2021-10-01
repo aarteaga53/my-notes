@@ -1,14 +1,12 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_speed_dial/flutter_speed_dial.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:mynotes/take_picture_page.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:pdf/pdf.dart';
-import 'package:pdf/widgets.dart' as pw;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
+import 'package:syncfusion_flutter_pdf/pdf.dart';
 import 'note_page.dart';
 
 void main() {
@@ -61,6 +59,24 @@ class _MyHomePageState extends State<MyHomePage> {
     noteCounter = prefs.getInt('noteCounter') ?? 1;
   }
 
+  void loadNoteList() async {
+    String filepath = await getFilepath();
+    if(File('$filepath/noteList.txt').existsSync()) {
+      final file = File('$filepath/noteList.txt');
+
+      List<String> lines = file.readAsLinesSync();
+
+      for(int i = 1; i < lines.length - 2; i++) {
+        var note = {
+          'imagePath' : lines[i],
+          'pdfPath' : lines[++i],
+          'title' : lines[++i],
+        };
+        noteList.add(note);
+      }
+    }
+  }
+
   void incrementNoteCounter() async {
     final prefs = await SharedPreferences.getInstance();
     noteCounter++;
@@ -77,56 +93,77 @@ class _MyHomePageState extends State<MyHomePage> {
 
   void createNote(String filepath, String filename) {
     var note = {
-      'image' : filename,
+      'imagePath' : filepath + '/note_image' + noteCounter.toString() + '.jpeg',
+      'pdfPath' : filename,
       'title' : 'Note' + noteCounter.toString(),
     };
-
     noteList.add(note);
+    saveNoteList();
+  }
 
+  void saveNoteList() async {
+    String filepath = await getFilepath();
     final file = File('$filepath/noteList.txt');
     file.writeAsStringSync('Note List\n');
     for (var element in noteList) {
-      file.writeAsStringSync(element['image'] + '\n', mode: FileMode.append);
+      file.writeAsStringSync(element['imagePath'] + '\n', mode: FileMode.append);
+      file.writeAsStringSync(element['pdfPath'] + '\n', mode: FileMode.append);
       file.writeAsStringSync(element['title'] + '\n', mode: FileMode.append);
     }
+    setState(() {
+
+    });
     //file.delete();
   }
 
-  void loadNoteList() async {
-    String filepath = await getFilepath();
-    if(File('$filepath/noteList.txt').existsSync()) {
-      final file = File('$filepath/noteList.txt');
+  void createPDF(File picture) async {
+    PdfDocument document = PdfDocument();
+    Uint8List imageData = picture.readAsBytesSync();
+    PdfBitmap image = PdfBitmap(imageData);
+    document.pageSettings.setMargins(0);
+    PdfPage page = document.pages.add();
+    page.graphics.drawImage(
+        image,
+        Rect.fromLTWH(0, 0, page.getClientSize().width, page.getClientSize().height)
+    );
 
-      List<String> lines = file.readAsLinesSync();
-
-      for(int i = 1; i < lines.length - 1; i++) {
-        var note = {
-          'image' : lines[i],
-          'title' : lines[++i],
-        };
-        noteList.add(note);
-      }
-    }
-
+    savePDF(document, picture);
   }
 
-  void createPDF(var pdf, File picture) {
-    final image = pw.MemoryImage(picture.readAsBytesSync());
-    pdf.addPage(pw.Page(
-        pageFormat: PdfPageFormat.a4,
-        build: (pw.Context context) {
-          return pw.FullPage(
-            ignoreMargins: true,
-              child: pw.Image(image, fit: pw.BoxFit.cover)
-          );
-        }));
+  void savePDF(PdfDocument document, File picture) async {
+    String filepath = await getFilepath();
+    String filename = filepath + '/note' + noteCounter.toString() + '.pdf';
+    final file = File(filename);
+    file.writeAsBytes(document.save());
+    //document.dispose();
+
+    createImage(filepath, picture);
+    createNote(filepath, filename);
+  }
+
+  void createImage(String filepath, File picture) {
+    final file = File(filepath + '/note_image' + noteCounter.toString() + '.jpeg');
+    file.writeAsBytes(picture.readAsBytesSync());
+  }
+
+  void sortNoteList() {
+    var tempList = noteList;
+    for(int i = 0; i < tempList.length-1; i++) {
+      for(int j = i+1; j < tempList.length; j++) {
+        if(tempList[i]['title'].toLowerCase().compareTo(tempList[j]['title'].toLowerCase()) >= 0) {
+          var tempNote = tempList[i];
+          tempList[i] = tempList[j];
+          tempList[j] = tempNote;
+        }
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Center(child: Text(widget.title)),
+        title: Text(widget.title),
       ),
       body: GridView.builder(
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -139,25 +176,31 @@ class _MyHomePageState extends State<MyHomePage> {
           return Column(
             children: [
               ListTile(
-                onTap: () {
-                  Navigator.push(
+                onTap: () async {
+                  final result = await Navigator.push(
                     context,
                     MaterialPageRoute(builder: (context) => NotePage(noteList[index])),
                   );
+                  //if(noteList[index]['title'].compareTo(result) != 0) {
+                    noteList[index]['title'] = result;
+                    sortNoteList();
+                    saveNoteList();
+                  //}
                 },
                 onLongPress: () {
 
                 },
                 title: Column(
                   children: [
-                    SizedBox(
+                    Container(
                       width: 100,
                       height: 100,
-                      child: IgnorePointer(
-                        child: SfPdfViewer.file(
-                          File(noteList[index]['image']),
-                          canShowScrollHead: false,
-                        ),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(5),
+                        image: DecorationImage(
+                          image: FileImage(File(noteList[index]['imagePath'])),
+                          fit: BoxFit.cover,
+                        )
                       ),
                     ),
                   ],
@@ -180,24 +223,12 @@ class _MyHomePageState extends State<MyHomePage> {
         children: [
           SpeedDialChild(
             onTap: () async {
-              final cameras = await availableCameras();
-              final firstCamera = cameras.first;
-
-              final result = await Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => TakePictureScreen(camera: firstCamera))
+              XFile? picture = await ImagePicker().pickImage(
+                  source: ImageSource.camera
               );
 
-              final picture = File(result);
-              var pdf = pw.Document();
-              createPDF(pdf, picture);
-
-              String filepath = await getFilepath();
-              String filename = filepath + '/Note' + noteCounter.toString() + '.pdf';
-              final file = File(filename);
-              file.writeAsBytes(await pdf.save());
-
-              createNote(filepath, filename);
+              final pictureFile = File(picture!.path);
+              createPDF(pictureFile);
               incrementNoteCounter();
             },
             label: 'Take Picture',
@@ -206,20 +237,12 @@ class _MyHomePageState extends State<MyHomePage> {
           ),
           SpeedDialChild(
             onTap: () async {
-              PickedFile? pickedFile = (await ImagePicker().pickImage(
+              XFile? image = await ImagePicker().pickImage(
                 source: ImageSource.gallery,
-              )) as PickedFile?;
+              );
 
-              final imageFile = File(pickedFile!.path);
-              var pdf = pw.Document();
-              createPDF(pdf, imageFile);
-
-              String filepath = await getFilepath();
-              String filename = filepath + '/Note' + noteCounter.toString() + '.pdf';
-              final file = File(filename);
-              file.writeAsBytes(await pdf.save());
-
-              createNote(filepath, filename);
+              final imageFile = File(image!.path);
+              createPDF(imageFile);
               incrementNoteCounter();
             },
             label: 'Add Image',
@@ -232,7 +255,7 @@ class _MyHomePageState extends State<MyHomePage> {
             },
             label: 'Create Folder',
             child: const Icon(Icons.create_new_folder),
-            backgroundColor: Colors.lightBlueAccent,
+            backgroundColor: Colors.lightBlue,
           )
         ],
       ),// This trailing comma makes auto-formatting nicer for build methods.
