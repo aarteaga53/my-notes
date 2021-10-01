@@ -1,8 +1,10 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
-import 'package:mynotes/take_picture_page.dart';
-import 'package:path_provider/path_provider.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:syncfusion_flutter_pdf/pdf.dart';
+import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 
 class NotePage extends StatefulWidget {
   //const NotePage({Key? key}) : super(key: key);
@@ -17,56 +19,89 @@ class NotePage extends StatefulWidget {
 
 class _NotePageState extends State<NotePage> {
 
-  int noteCounter = 2;
-  PageController pageController = PageController();
-  var notes = [];
+  TextEditingController editingController = TextEditingController();
+  bool isEditingText = false;
 
   @override
   void initState() {
     super.initState();
-
-    notes.add(widget.notePath['image']);
+    editingController = TextEditingController(text: widget.notePath['title']);
   }
 
-  void incrementNoteCounter() {
+  @override
+  void dispose() {
+    editingController.dispose();
+    super.dispose();
+  }
+
+  void createPDF(File picture) {
+    PdfDocument document = PdfDocument(inputBytes: File(widget.notePath['pdfPath']).readAsBytesSync());
+    Uint8List imageData = picture.readAsBytesSync();
+    PdfBitmap image = PdfBitmap(imageData);
+    document.pageSettings.setMargins(0);
+    PdfPage page = document.pages.add();
+    page.graphics.drawImage(
+        image,
+        Rect.fromLTWH(0, 0, page.getClientSize().width, page.getClientSize().height)
+    );
+    //page = document.pages.add();
+
+    savePDF(document);
+  }
+
+  void savePDF(PdfDocument document) {
+    final file = File(widget.notePath['pdfPath']);
+    file.writeAsBytes(document.save());
+    //document.dispose();
     setState(() {
-      noteCounter++;
+
     });
+  }
+
+  Widget editTitleTextField() {
+    if(isEditingText) {
+      return TextField(
+        onSubmitted: (newValue) {
+          setState(() {
+            widget.notePath['title'] = newValue;
+            isEditingText = false;
+          });
+        },
+        autofocus: true,
+        controller: editingController,
+      );
+    }
+    return InkWell(
+      onTap: () {
+        setState(() {
+          isEditingText = true;
+        });
+      },
+      child: Text(
+        widget.notePath['title'],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Center(
-            child: Text(widget.notePath['title'])
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios),
+          onPressed: () {
+            Navigator.pop(context, widget.notePath['title']);
+          },
         ),
-        actions: [
-          IconButton(
-              onPressed: () {
-
-              },
-              icon: const Icon(Icons.edit),
-
-    )
-        ],
+        title: editTitleTextField(),
       ),
       body: Column(
         children: [
           Expanded(
             flex: 90,
-            child: PageView.builder(
-              controller: pageController,
-              itemCount: notes.length,
-              itemBuilder: (BuildContext context, int index) {
-                return SizedBox(
-                  child: Image(
-                    image: FileImage(File(notes[index])),
-                    //image: FileImage(File(widget.notePath['image'])),
-                    fit: BoxFit.cover,
-                  ),
-                );
-              },
+            child: SfPdfViewer.file(
+              File(widget.notePath['pdfPath']), pageSpacing: 10,
+              canShowScrollHead: false,
             ),
           ),
           Expanded(
@@ -75,23 +110,26 @@ class _NotePageState extends State<NotePage> {
               children: [
                 IconButton(
                   onPressed: () async {
-                    final cameras = await availableCameras();
-                    final firstCamera = cameras.first;
-
-                    final result = await Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (context) => TakePictureScreen(camera: firstCamera))
+                    XFile? picture = await ImagePicker().pickImage(
+                        source: ImageSource.camera
                     );
-                    final picture = File(result);
 
-                    var filename = widget.notePath['path'] + '/Note' + noteCounter.toString() + '.jpeg';
-                    final file = File(filename);
-                    file.writeAsBytesSync(picture.readAsBytesSync());
-
-                    notes.add(filename);
-                    incrementNoteCounter();
+                    final pictureFile = File(picture!.path);
+                    createPDF(pictureFile);
                   },
-                  icon: const Icon(Icons.camera_alt),
+                  icon: const Icon(Icons.add_a_photo),
+                ),
+                const Spacer(),
+                IconButton(
+                  onPressed: () async {
+                    XFile? image = await ImagePicker().pickImage(
+                      source: ImageSource.gallery,
+                    );
+
+                    final imageFile = File(image!.path);
+                    createPDF(imageFile);
+                  },
+                  icon: const Icon(Icons.add_photo_alternate)
                 ),
                 const Spacer(),
                 IconButton(
