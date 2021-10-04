@@ -41,22 +41,23 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
 
-  int noteCounter = 1;
+  int noteCounter = 0;
   List noteList = [];
 
   @override
   void initState() {
     super.initState();
+    loadNoteCounter();
+    loadNoteList();
     setState(() {
-      loadNoteCounter();
-      loadNoteList();
+
     });
   }
 
   void loadNoteCounter() async {
     final prefs = await SharedPreferences.getInstance();
     //prefs.remove('noteCounter');
-    noteCounter = prefs.getInt('noteCounter') ?? 1;
+    noteCounter = prefs.getInt('noteCounter') ?? 0;
   }
 
   void loadNoteList() async {
@@ -102,6 +103,7 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   void saveNoteList() async {
+    sortNoteList();
     String filepath = await getFilepath();
     final file = File('$filepath/noteList.txt');
     file.writeAsStringSync('Note List\n');
@@ -126,6 +128,7 @@ class _MyHomePageState extends State<MyHomePage> {
         image,
         Rect.fromLTWH(0, 0, page.getClientSize().width, page.getClientSize().height)
     );
+    page = document.pages.add();
 
     savePDF(document, picture);
   }
@@ -135,7 +138,7 @@ class _MyHomePageState extends State<MyHomePage> {
     String filename = filepath + '/note' + noteCounter.toString() + '.pdf';
     final file = File(filename);
     file.writeAsBytes(document.save());
-    //document.dispose();
+    document.dispose();
 
     createImage(filepath, picture);
     createNote(filepath, filename);
@@ -144,6 +147,13 @@ class _MyHomePageState extends State<MyHomePage> {
   void createImage(String filepath, File picture) {
     final file = File(filepath + '/note_image' + noteCounter.toString() + '.jpeg');
     file.writeAsBytes(picture.readAsBytesSync());
+  }
+
+  void deleteNote(String pdfPath, String imagePath) {
+    var file = File(pdfPath);
+    file.delete();
+    file = File(imagePath);
+    file.delete();
   }
 
   void sortNoteList() {
@@ -157,6 +167,7 @@ class _MyHomePageState extends State<MyHomePage> {
         }
       }
     }
+    noteList = tempList;
   }
 
   @override
@@ -181,14 +192,42 @@ class _MyHomePageState extends State<MyHomePage> {
                     context,
                     MaterialPageRoute(builder: (context) => NotePage(noteList[index])),
                   );
-                  //if(noteList[index]['title'].compareTo(result) != 0) {
-                    noteList[index]['title'] = result;
-                    sortNoteList();
-                    saveNoteList();
-                  //}
+                  noteList[index]['title'] = result;
+                  saveNoteList();
                 },
                 onLongPress: () {
-
+                  showDialog(context: context, builder: (BuildContext context) {
+                    return AlertDialog(
+                      title: Text(noteList[index]['title']),
+                      actionsAlignment: MainAxisAlignment.center,
+                      content: Text(
+                        'Are you sure you want to delete ' + noteList[index]['title'] + '.',
+                        textAlign: TextAlign.left,
+                      ),
+                      actions: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            TextButton(
+                              onPressed: () {
+                                Navigator.pop(context);
+                              },
+                              child: const Text('Cancel'),
+                            ),
+                            TextButton(
+                              onPressed: () {
+                                deleteNote(noteList[index]['pdfPath'].toString(), noteList[index]['imagePath'].toString());
+                                noteList.removeAt(index);
+                                saveNoteList();
+                                Navigator.pop(context);
+                              },
+                              child: const Text('Delete'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    );
+                  });
                 },
                 title: Column(
                   children: [
@@ -249,14 +288,6 @@ class _MyHomePageState extends State<MyHomePage> {
             child: const Icon(Icons.add_photo_alternate),
             backgroundColor: Colors.lightBlueAccent,
           ),
-          SpeedDialChild(
-            onTap: () {
-
-            },
-            label: 'Create Folder',
-            child: const Icon(Icons.create_new_folder),
-            backgroundColor: Colors.lightBlue,
-          )
         ],
       ),// This trailing comma makes auto-formatting nicer for build methods.
     );
