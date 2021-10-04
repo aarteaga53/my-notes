@@ -19,32 +19,26 @@ class NotePage extends StatefulWidget {
 
 class _NotePageState extends State<NotePage> {
 
-  TextEditingController editingController = TextEditingController();
+  TextEditingController titleController = TextEditingController();
+  TextEditingController pageController = TextEditingController();
   bool isEditingText = false;
 
   @override
   void initState() {
     super.initState();
-    editingController = TextEditingController(text: widget.notePath['title']);
+    titleController = TextEditingController(text: widget.notePath['title']);
   }
 
-  @override
-  void dispose() {
-    editingController.dispose();
-    super.dispose();
-  }
-
-  void createPDF(File picture) {
+  void modifyPDF(File picture) {
     PdfDocument document = PdfDocument(inputBytes: File(widget.notePath['pdfPath']).readAsBytesSync());
     Uint8List imageData = picture.readAsBytesSync();
     PdfBitmap image = PdfBitmap(imageData);
-    document.pageSettings.setMargins(0);
-    PdfPage page = document.pages.add();
+    PdfPage page = document.pages[document.pages.count-1];
     page.graphics.drawImage(
         image,
         Rect.fromLTWH(0, 0, page.getClientSize().width, page.getClientSize().height)
     );
-    //page = document.pages.add();
+    document.pages.add();
 
     savePDF(document);
   }
@@ -52,10 +46,18 @@ class _NotePageState extends State<NotePage> {
   void savePDF(PdfDocument document) {
     final file = File(widget.notePath['pdfPath']);
     file.writeAsBytes(document.save());
-    //document.dispose();
+    document.dispose();
     setState(() {
 
     });
+  }
+
+  void deletePage(int pageNum) {
+    PdfDocument document = PdfDocument(inputBytes: File(widget.notePath['pdfPath']).readAsBytesSync());
+    if(pageNum < document.pages.count) {
+      document.pages.removeAt(pageNum - 1);
+      savePDF(document);
+    }
   }
 
   Widget editTitleTextField() {
@@ -68,7 +70,7 @@ class _NotePageState extends State<NotePage> {
           });
         },
         autofocus: true,
-        controller: editingController,
+        controller: titleController,
       );
     }
     return InkWell(
@@ -115,7 +117,7 @@ class _NotePageState extends State<NotePage> {
                     );
 
                     final pictureFile = File(picture!.path);
-                    createPDF(pictureFile);
+                    modifyPDF(pictureFile);
                   },
                   icon: const Icon(Icons.add_a_photo),
                 ),
@@ -127,7 +129,7 @@ class _NotePageState extends State<NotePage> {
                     );
 
                     final imageFile = File(image!.path);
-                    createPDF(imageFile);
+                    modifyPDF(imageFile);
                   },
                   icon: const Icon(Icons.add_photo_alternate)
                 ),
@@ -141,7 +143,41 @@ class _NotePageState extends State<NotePage> {
                 const Spacer(),
                 IconButton(
                   onPressed: () {
-
+                    showDialog(context: context, builder: (BuildContext context) {
+                      return AlertDialog(
+                        title: const Text('Delete Page'),
+                        actions: [
+                          TextField(
+                            controller: pageController,
+                              decoration: const InputDecoration(
+                                border: OutlineInputBorder(),
+                                labelText: 'Enter page number ',
+                              )
+                          ),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              TextButton(
+                                onPressed: () {
+                                  Navigator.pop(context);
+                                  pageController.clear();
+                                },
+                                child: const Text('Cancel'),
+                              ),
+                              TextButton(
+                                onPressed: () {
+                                  deletePage(int.parse(pageController.text));
+                                  Navigator.pop(context);
+                                  pageController.clear();
+                                },
+                                child: const Text('Enter'),
+                              ),
+                            ],
+                          ),
+                        ],
+                      );
+                    });
                   },
                   icon: const Icon(Icons.delete),
                 ),
