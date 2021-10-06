@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
+import 'note_list.dart';
 import 'note_page.dart';
 
 void main() {
@@ -41,8 +42,8 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
 
+  List<NoteList> notes = <NoteList>[];
   int noteCounter = 0;
-  List noteList = [];
 
   @override
   void initState() {
@@ -68,12 +69,8 @@ class _MyHomePageState extends State<MyHomePage> {
       List<String> lines = file.readAsLinesSync();
 
       for(int i = 1; i < lines.length - 2; i++) {
-        var note = {
-          'imagePath' : lines[i],
-          'pdfPath' : lines[++i],
-          'title' : lines[++i],
-        };
-        noteList.add(note);
+        NoteList note = NoteList(lines[i], lines[++i], lines[++i]);
+        notes.add(note);
       }
     }
   }
@@ -93,24 +90,23 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   void createNote(String filepath, String filename) {
-    var note = {
-      'imagePath' : filepath + '/note_image' + noteCounter.toString() + '.jpeg',
-      'pdfPath' : filename,
-      'title' : 'Note' + noteCounter.toString(),
-    };
-    noteList.add(note);
+    NoteList note = NoteList(
+      filepath + '/note_image' + noteCounter.toString() + '.jpeg',
+      filename,
+      'Note' + noteCounter.toString()
+    );
+    notes.add(note);
     saveNoteList();
   }
 
   void saveNoteList() async {
-    sortNoteList();
     String filepath = await getFilepath();
     final file = File('$filepath/noteList.txt');
     file.writeAsStringSync('Note List\n');
-    for (var element in noteList) {
-      file.writeAsStringSync(element['imagePath'] + '\n', mode: FileMode.append);
-      file.writeAsStringSync(element['pdfPath'] + '\n', mode: FileMode.append);
-      file.writeAsStringSync(element['title'] + '\n', mode: FileMode.append);
+    for (var element in notes) {
+      file.writeAsStringSync(element.imagePath + '\n', mode: FileMode.append);
+      file.writeAsStringSync(element.pdfPath + '\n', mode: FileMode.append);
+      file.writeAsStringSync(element.title + '\n', mode: FileMode.append);
     }
     setState(() {
 
@@ -156,20 +152,6 @@ class _MyHomePageState extends State<MyHomePage> {
     file.delete();
   }
 
-  void sortNoteList() {
-    var tempList = noteList;
-    for(int i = 0; i < tempList.length-1; i++) {
-      for(int j = i+1; j < tempList.length; j++) {
-        if(tempList[i]['title'].toLowerCase().compareTo(tempList[j]['title'].toLowerCase()) >= 0) {
-          var tempNote = tempList[i];
-          tempList[i] = tempList[j];
-          tempList[j] = tempNote;
-        }
-      }
-    }
-    noteList = tempList;
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -182,7 +164,7 @@ class _MyHomePageState extends State<MyHomePage> {
           crossAxisSpacing: 5,
           mainAxisSpacing: 10,
         ),
-        itemCount: noteList.length,
+        itemCount: notes.length,
         itemBuilder: (BuildContext context, int index) {
           return Column(
             children: [
@@ -190,18 +172,17 @@ class _MyHomePageState extends State<MyHomePage> {
                 onTap: () async {
                   final result = await Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (context) => NotePage(noteList[index])),
+                    MaterialPageRoute(builder: (context) => NotePage(notes[index])),
                   );
-                  noteList[index]['title'] = result;
                   saveNoteList();
                 },
                 onLongPress: () {
                   showDialog(context: context, builder: (BuildContext context) {
                     return AlertDialog(
-                      title: Text(noteList[index]['title']),
+                      title: Text(notes[index].title),
                       actionsAlignment: MainAxisAlignment.center,
                       content: Text(
-                        'Are you sure you want to delete ' + noteList[index]['title'] + '.',
+                        'Are you sure you want to delete ' + notes[index].title + '.',
                         textAlign: TextAlign.left,
                       ),
                       actions: [
@@ -216,8 +197,8 @@ class _MyHomePageState extends State<MyHomePage> {
                             ),
                             TextButton(
                               onPressed: () {
-                                deleteNote(noteList[index]['pdfPath'].toString(), noteList[index]['imagePath'].toString());
-                                noteList.removeAt(index);
+                                deleteNote(notes[index].pdfPath, notes[index].imagePath);
+                                notes.removeAt(index);
                                 saveNoteList();
                                 Navigator.pop(context);
                               },
@@ -237,7 +218,7 @@ class _MyHomePageState extends State<MyHomePage> {
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(5),
                         image: DecorationImage(
-                          image: FileImage(File(noteList[index]['imagePath'])),
+                          image: FileImage(File(notes[index].imagePath)),
                           fit: BoxFit.cover,
                         )
                       ),
@@ -249,13 +230,12 @@ class _MyHomePageState extends State<MyHomePage> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Text(noteList[index]['title']),
+                    Text(notes[index].title),
                   ]
               ),
             ],
           );
         },
-
       ),
       floatingActionButton: SpeedDial(
         icon: Icons.create,
@@ -286,6 +266,14 @@ class _MyHomePageState extends State<MyHomePage> {
             },
             label: 'Add Image',
             child: const Icon(Icons.add_photo_alternate),
+            backgroundColor: Colors.lightBlueAccent,
+          ),
+          SpeedDialChild(
+            onTap: () {
+
+            },
+            label: 'Create Folder',
+            child: const Icon(Icons.create_new_folder_rounded),
             backgroundColor: Colors.lightBlueAccent,
           ),
         ],

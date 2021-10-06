@@ -2,16 +2,19 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 
+import 'note_list.dart';
+
 class NotePage extends StatefulWidget {
   //const NotePage({Key? key}) : super(key: key);
 
-  var notePath;
+  NoteList note;
 
-  NotePage(this.notePath, {Key? key}) : super(key: key);
+  NotePage(this.note, {Key? key}) : super(key: key);
 
   @override
   _NotePageState createState() => _NotePageState();
@@ -21,16 +24,17 @@ class _NotePageState extends State<NotePage> {
 
   TextEditingController titleController = TextEditingController();
   TextEditingController pageController = TextEditingController();
+  TextEditingController moveController = TextEditingController();
   bool isEditingText = false;
 
   @override
   void initState() {
     super.initState();
-    titleController = TextEditingController(text: widget.notePath['title']);
+    titleController = TextEditingController(text: widget.note.title);
   }
 
   void modifyPDF(File picture) {
-    PdfDocument document = PdfDocument(inputBytes: File(widget.notePath['pdfPath']).readAsBytesSync());
+    PdfDocument document = PdfDocument(inputBytes: File(widget.note.pdfPath).readAsBytesSync());
     Uint8List imageData = picture.readAsBytesSync();
     PdfBitmap image = PdfBitmap(imageData);
     PdfPage page = document.pages[document.pages.count-1];
@@ -44,7 +48,7 @@ class _NotePageState extends State<NotePage> {
   }
 
   void savePDF(PdfDocument document) {
-    final file = File(widget.notePath['pdfPath']);
+    final file = File(widget.note.pdfPath);
     file.writeAsBytes(document.save());
     document.dispose();
     setState(() {
@@ -53,10 +57,21 @@ class _NotePageState extends State<NotePage> {
   }
 
   void deletePage(int pageNum) {
-    PdfDocument document = PdfDocument(inputBytes: File(widget.notePath['pdfPath']).readAsBytesSync());
+    PdfDocument document = PdfDocument(inputBytes: File(widget.note.pdfPath).readAsBytesSync());
     if(pageNum < document.pages.count) {
       document.pages.removeAt(pageNum - 1);
       savePDF(document);
+    }
+  }
+
+  void movePage(int pageNum, int moveNum) {
+    PdfDocument document = PdfDocument(inputBytes: File(widget.note.pdfPath).readAsBytesSync());
+    if(pageNum < document.pages.count) {
+      if(moveNum != pageNum && moveNum > 0 && moveNum < document.pages.count) {
+        PdfPage page = document.pages[pageNum - 1];
+        document.pages.insert(moveNum - 1);
+        document.pages.removeAt(pageNum - 1);
+      }
     }
   }
 
@@ -65,7 +80,7 @@ class _NotePageState extends State<NotePage> {
       return TextField(
         onSubmitted: (newValue) {
           setState(() {
-            widget.notePath['title'] = newValue;
+            widget.note.title = newValue;
             isEditingText = false;
           });
         },
@@ -80,7 +95,7 @@ class _NotePageState extends State<NotePage> {
         });
       },
       child: Text(
-        widget.notePath['title'],
+        widget.note.title,
       ),
     );
   }
@@ -92,7 +107,7 @@ class _NotePageState extends State<NotePage> {
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios),
           onPressed: () {
-            Navigator.pop(context, widget.notePath['title']);
+            Navigator.pop(context, widget.note.title);
           },
         ),
         title: editTitleTextField(),
@@ -102,7 +117,7 @@ class _NotePageState extends State<NotePage> {
           Expanded(
             flex: 90,
             child: SfPdfViewer.file(
-              File(widget.notePath['pdfPath']), pageSpacing: 10,
+              File(widget.note.pdfPath), pageSpacing: 10,
               canShowScrollHead: false,
             ),
           ),
@@ -136,7 +151,56 @@ class _NotePageState extends State<NotePage> {
                 const Spacer(),
                 IconButton(
                   onPressed: () {
-
+                    showDialog(context: context, builder: (BuildContext context) {
+                      return AlertDialog(
+                        title: const Text('Move Page'),
+                        content: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            TextField(
+                              controller: pageController,
+                              decoration: const InputDecoration(
+                                border: OutlineInputBorder(),
+                                labelText: 'Enter page to move:',
+                              ),
+                            ),
+                            const SizedBox(height: 5),
+                            TextField(
+                              controller: moveController,
+                              decoration: const InputDecoration(
+                                border: OutlineInputBorder(),
+                                labelText: 'Enter position to move to:',
+                              ),
+                            ),
+                          ],
+                        ),
+                        actions: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              TextButton(
+                                onPressed: () {
+                                  Navigator.pop(context);
+                                  pageController.clear();
+                                  moveController.clear();
+                                },
+                                child: const Text('Cancel'),
+                              ),
+                              TextButton(
+                                onPressed: () {
+                                  movePage(int.parse(pageController.text), int.parse(moveController.text));
+                                  Navigator.pop(context);
+                                  pageController.clear();
+                                  moveController.clear();
+                                },
+                                child: const Text('Enter'),
+                              ),
+                            ],
+                          ),
+                        ],
+                      );
+                    });
                   },
                   icon: const Icon(Icons.reorder),
                 ),
@@ -146,14 +210,14 @@ class _NotePageState extends State<NotePage> {
                     showDialog(context: context, builder: (BuildContext context) {
                       return AlertDialog(
                         title: const Text('Delete Page'),
-                        actions: [
-                          TextField(
+                        content: TextField(
                             controller: pageController,
-                              decoration: const InputDecoration(
-                                border: OutlineInputBorder(),
-                                labelText: 'Enter page number ',
-                              )
-                          ),
+                            decoration: const InputDecoration(
+                              border: OutlineInputBorder(),
+                              labelText: 'Enter page number:',
+                            )
+                        ),
+                        actions: [
                           Row(
                             mainAxisAlignment: MainAxisAlignment.end,
                             crossAxisAlignment: CrossAxisAlignment.end,
