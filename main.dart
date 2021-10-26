@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:camera/camera.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_speed_dial/flutter_speed_dial.dart';
 import 'package:image_picker/image_picker.dart';
@@ -44,15 +45,13 @@ class _MyHomePageState extends State<MyHomePage> {
 
   List<NoteList> notes = <NoteList>[];
   int noteCounter = 0;
+  String viewType = 'Grid';
 
   @override
   void initState() {
     super.initState();
     loadNoteCounter();
     loadNoteList();
-    setState(() {
-
-    });
   }
 
   void loadNoteCounter() async {
@@ -73,6 +72,9 @@ class _MyHomePageState extends State<MyHomePage> {
         notes.add(note);
       }
     }
+    setState(() {
+
+    });
   }
 
   void incrementNoteCounter() async {
@@ -155,20 +157,106 @@ class _MyHomePageState extends State<MyHomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.title),
-      ),
-      body: GridView.builder(
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 3,
-          crossAxisSpacing: 5,
-          mainAxisSpacing: 10,
-        ),
-        itemCount: notes.length,
-        itemBuilder: (BuildContext context, int index) {
-          return Column(
+      drawer: SizedBox(
+        width: MediaQuery.of(context).size.width * 0.5,
+        child: Drawer(
+          child: ListView(
+            padding: EdgeInsets.zero,
             children: [
+              const SizedBox(
+                height: 125,
+                child: DrawerHeader(
+                  child: Text(''),
+                  decoration: BoxDecoration(
+                    color: Colors.transparent,
+                  ),
+                ),
+              ),
               ListTile(
+                title: RichText(
+                  text: TextSpan(
+                    children: [
+                      const WidgetSpan(
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 2.0),
+                          child: Icon(Icons.star, size: 18),
+                        ),
+                      ),
+                      TextSpan(text: ' Favorite', style: Theme.of(context).textTheme.bodyText2),
+                    ],
+                  ),
+                ),
+                onTap: () {
+                  Navigator.pop(context);
+                },
+              ),
+              ListTile(
+                title: RichText(
+                  text: TextSpan(
+                    children: [
+                      const WidgetSpan(
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 2.0),
+                          child: Icon(Icons.delete, size: 18),
+                        ),
+                      ),
+                      TextSpan(text: ' Trash', style: Theme.of(context).textTheme.bodyText2),
+                    ],
+                  ),
+                ),
+                onTap: () {
+                  Navigator.pop(context);
+                },
+              ),
+            ],
+          )
+        ),
+      ),
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(100.0),
+        child: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          iconTheme: IconThemeData(color: Theme.of(context).iconTheme.color),
+          title: Center(
+            child: Text(
+              widget.title,
+              style: Theme.of(context).textTheme.headline6,
+            ),
+          ),
+          actions: [
+            Center(
+              child: DropdownButton<String>(
+                icon: const Icon(Icons.more_vert),
+                elevation: 16,
+                underline: DropdownButtonHideUnderline(child: Container()),
+                onChanged: (String? newValue) {
+                  setState(() {
+                    viewType = newValue!;
+                  });
+                },
+                items: <String>['Grid', 'List',]
+                    .map<DropdownMenuItem<String>>((String value) {
+                      return DropdownMenuItem<String>(
+                        value: value,
+                        child: Text(value),
+                      );
+                    }).toList(),
+              ),
+            )
+          ],
+        ),
+      ),
+      body: viewType == 'Grid' ?
+          GridView.builder(
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 3,
+              crossAxisSpacing: 5,
+              mainAxisSpacing: 25,
+            ),
+            itemCount: notes.length,
+            itemBuilder: (BuildContext context, int index) {
+              return ListTile(
                 onTap: () async {
                   final result = await Navigator.push(
                     context,
@@ -181,8 +269,8 @@ class _MyHomePageState extends State<MyHomePage> {
                     return AlertDialog(
                       title: Text(notes[index].title),
                       actionsAlignment: MainAxisAlignment.center,
-                      content: Text(
-                        'Are you sure you want to delete ' + notes[index].title + '.',
+                      content: const Text(
+                        'Are you sure you want to delete this note.',
                         textAlign: TextAlign.left,
                       ),
                       actions: [
@@ -213,7 +301,6 @@ class _MyHomePageState extends State<MyHomePage> {
                 title: Column(
                   children: [
                     Container(
-                      width: 100,
                       height: 100,
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(5),
@@ -223,21 +310,105 @@ class _MyHomePageState extends State<MyHomePage> {
                         )
                       ),
                     ),
+                    Expanded(
+                      flex: 50,
+                      child: Text(notes[index].title,
+                          style: Theme.of(context).textTheme.bodyText2
+                      ),
+                    ),
+                    Expanded(
+                      flex: 50,
+                      child: Text('10/26',
+                          style: Theme.of(context).textTheme.bodyText2
+                      ),
+                    ),
                   ],
                 ),
-              ),
-              Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Text(notes[index].title),
-                  ]
-              ),
-            ],
-          );
-        },
-      ),
+              );
+            },
+          ) :
+          ListView.builder(
+            itemCount: notes.length,
+            itemBuilder: (BuildContext context, int index) {
+              return ListTile(
+                onTap: () async {
+                  final result = await Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => NotePage(notes[index])),
+                  );
+                  saveNoteList();
+                },
+                onLongPress: () {
+                  showDialog(context: context, builder: (BuildContext context) {
+                    return AlertDialog(
+                      title: Text(notes[index].title),
+                      actionsAlignment: MainAxisAlignment.center,
+                      content: const Text(
+                        'Are you sure you want to delete this note.',
+                        textAlign: TextAlign.left,
+                      ),
+                      actions: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            TextButton(
+                              onPressed: () {
+                                Navigator.pop(context);
+                              },
+                              child: const Text('Cancel'),
+                            ),
+                            TextButton(
+                              onPressed: () {
+                                deleteNote(notes[index].pdfPath, notes[index].imagePath);
+                                notes.removeAt(index);
+                                saveNoteList();
+                                Navigator.pop(context);
+                              },
+                              child: const Text('Delete'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    );
+                  });
+                },
+                title: SizedBox(
+                  height: 100,
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 85,
+                        height: 85,
+                        //margin: const EdgeInsets.only(right: 10),
+                        decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(5),
+                            image: DecorationImage(
+                              image: FileImage(File(notes[index].imagePath)),
+                              fit: BoxFit.cover,
+                            )
+                        ),
+                      ),
+                      const Spacer(),
+                      Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(notes[index].title,
+                                style: Theme.of(context).textTheme.bodyText2
+                            ),
+                            Text('10/26',
+                                style: Theme.of(context).textTheme.bodyText2
+                            )
+                          ]
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
       floatingActionButton: SpeedDial(
+        backgroundColor: Colors.blueGrey,
         icon: Icons.create,
         children: [
           SpeedDialChild(
@@ -247,6 +418,7 @@ class _MyHomePageState extends State<MyHomePage> {
               );
 
               final pictureFile = File(picture!.path);
+
               createPDF(pictureFile);
               incrementNoteCounter();
             },
@@ -261,6 +433,7 @@ class _MyHomePageState extends State<MyHomePage> {
               );
 
               final imageFile = File(image!.path);
+
               createPDF(imageFile);
               incrementNoteCounter();
             },
@@ -268,14 +441,14 @@ class _MyHomePageState extends State<MyHomePage> {
             child: const Icon(Icons.add_photo_alternate),
             backgroundColor: Colors.lightBlueAccent,
           ),
-          SpeedDialChild(
-            onTap: () {
-
-            },
-            label: 'Create Folder',
-            child: const Icon(Icons.create_new_folder_rounded),
-            backgroundColor: Colors.lightBlueAccent,
-          ),
+          // SpeedDialChild(
+          //   onTap: () {
+          //
+          //   },
+          //   label: 'Create Folder',
+          //   child: const Icon(Icons.create_new_folder_rounded),
+          //   backgroundColor: Colors.lightBlueAccent,
+          // ),
         ],
       ),// This trailing comma makes auto-formatting nicer for build methods.
     );
