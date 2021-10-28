@@ -5,9 +5,11 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_speed_dial/flutter_speed_dial.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:mynotes/trash_page.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
+import 'favorite_page.dart';
 import 'note_list.dart';
 import 'note_page.dart';
 
@@ -21,6 +23,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      debugShowCheckedModeBanner: false,
       title: 'My Notes',
       theme: ThemeData(
         primarySwatch: Colors.blueGrey,
@@ -44,37 +47,93 @@ class MyHomePage extends StatefulWidget {
 class _MyHomePageState extends State<MyHomePage> {
 
   List<NoteList> notes = <NoteList>[];
+  List<NoteList> trash = <NoteList>[];
+  List<NoteList> favorites = <NoteList>[];
   int noteCounter = 0;
   String viewType = 'Grid';
+  String sortType = 'Date';
 
   @override
   void initState() {
     super.initState();
-    loadNoteCounter();
-    loadNoteList();
+    setState(() {
+      loadData();
+      loadNoteList();
+      loadFavoriteList();
+      loadTrashList();
+    });
   }
 
-  void loadNoteCounter() async {
+  void loadData() async {
     final prefs = await SharedPreferences.getInstance();
-    //prefs.remove('noteCounter');
     noteCounter = prefs.getInt('noteCounter') ?? 0;
+    viewType = prefs.getString('viewType') ?? 'Grid';
+    sortType = prefs.getString('sortType') ?? 'Date';
+    setState(() {
+
+    });
   }
 
   void loadNoteList() async {
     String filepath = await getFilepath();
     if(File('$filepath/noteList.txt').existsSync()) {
       final file = File('$filepath/noteList.txt');
+      List<NoteList> temp = <NoteList>[];
 
       List<String> lines = file.readAsLinesSync();
 
-      for(int i = 1; i < lines.length - 2; i++) {
-        NoteList note = NoteList(lines[i], lines[++i], lines[++i]);
-        notes.add(note);
+      for(int i = 1; i < lines.length - 4; i++) {
+        NoteList note = NoteList(lines[i], lines[++i], lines[++i], int.parse(lines[++i]), lines[++i]);
+        temp.add(note);
       }
+      setState(() {
+        notes = temp;
+      });
     }
-    setState(() {
+  }
 
-    });
+  void loadFavoriteList() async {
+    String filepath = await getFilepath();
+    if(File('$filepath/favoriteList.txt').existsSync()) {
+      final file = File('$filepath/favoriteList.txt');
+      List<NoteList> temp = <NoteList>[];
+
+      List<String> lines = file.readAsLinesSync();
+
+      for(int i = 1; i < lines.length - 4; i++) {
+        NoteList note = NoteList(lines[i], lines[++i], lines[++i], int.parse(lines[++i]), lines[++i]);
+        temp.add(note);
+      }
+      setState(() {
+        favorites = temp;
+      });
+    }
+  }
+
+  void loadTrashList() async {
+    String filepath = await getFilepath();
+    if(File('$filepath/trashList.txt').existsSync()) {
+      final file = File('$filepath/trashList.txt');
+      List<NoteList> temp = <NoteList>[];
+
+      List<String> lines = file.readAsLinesSync();
+
+      for(int i = 1; i < lines.length - 4; i++) {
+        NoteList note = NoteList(lines[i], lines[++i], lines[++i], int.parse(lines[++i]), lines[++i]);
+        var date = DateTime.fromMillisecondsSinceEpoch(note.timestamp).add(const Duration(days: 30));
+        var now = DateTime.now();
+        if(date.isAfter(now)) {
+          temp.add(note);
+        }
+        else {
+          deletePermanently(note.pdfPath, note.imagePath);
+          saveTrashList();
+        }
+      }
+      setState(() {
+        trash = temp;
+      });
+    }
   }
 
   void incrementNoteCounter() async {
@@ -86,22 +145,29 @@ class _MyHomePageState extends State<MyHomePage> {
     });
   }
 
-  Future<String> getFilepath() async {
-    final directory = await getApplicationDocumentsDirectory();
-    return directory.path;
+  void setViewType() async {
+    final prefs = await SharedPreferences.getInstance();
+    prefs.setString('viewType', viewType);
+    setState(() {
+
+    });
   }
 
-  void createNote(String filepath, String filename) {
-    NoteList note = NoteList(
-      filepath + '/note_image' + noteCounter.toString() + '.jpeg',
-      filename,
-      'Note' + noteCounter.toString()
-    );
-    notes.add(note);
-    saveNoteList();
+  void setSortType() async {
+    final prefs = await SharedPreferences.getInstance();
+    prefs.setString('sortType', sortType);
+    setState(() {
+      if(sortType == 'Date') {
+        sortDate();
+      }
+      else {
+        sortTitle();
+      }
+    });
   }
 
   void saveNoteList() async {
+    setSortType();
     String filepath = await getFilepath();
     final file = File('$filepath/noteList.txt');
     file.writeAsStringSync('Note List\n');
@@ -109,11 +175,55 @@ class _MyHomePageState extends State<MyHomePage> {
       file.writeAsStringSync(element.imagePath + '\n', mode: FileMode.append);
       file.writeAsStringSync(element.pdfPath + '\n', mode: FileMode.append);
       file.writeAsStringSync(element.title + '\n', mode: FileMode.append);
+      file.writeAsStringSync(element.timestamp.toString() + '\n', mode: FileMode.append);
+      file.writeAsStringSync(element.favorite + '\n', mode: FileMode.append);
     }
     setState(() {
 
     });
-    //file.delete();
+  }
+
+  void saveFavoriteList() async {
+    favorites.sort((a, b) => a.title.compareTo(b.title));
+
+    String filepath = await getFilepath();
+    final file = File('$filepath/favoriteList.txt');
+    file.writeAsStringSync('Favorite List\n');
+
+    for (var element in favorites) {
+      file.writeAsStringSync(element.imagePath + '\n', mode: FileMode.append);
+      file.writeAsStringSync(element.pdfPath + '\n', mode: FileMode.append);
+      file.writeAsStringSync(element.title + '\n', mode: FileMode.append);
+      file.writeAsStringSync(element.timestamp.toString() + '\n', mode: FileMode.append);
+      file.writeAsStringSync(element.favorite + '\n', mode: FileMode.append);
+    }
+    setState(() {
+
+    });
+  }
+
+  void saveTrashList() async {
+    trash.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+
+    String filepath = await getFilepath();
+    final file = File('$filepath/trashList.txt');
+    file.writeAsStringSync('Trash List\n');
+
+    for (var element in trash) {
+      file.writeAsStringSync(element.imagePath + '\n', mode: FileMode.append);
+      file.writeAsStringSync(element.pdfPath + '\n', mode: FileMode.append);
+      file.writeAsStringSync(element.title + '\n', mode: FileMode.append);
+      file.writeAsStringSync(element.timestamp.toString() + '\n', mode: FileMode.append);
+      file.writeAsStringSync(element.favorite + '\n', mode: FileMode.append);
+    }
+    setState(() {
+
+    });
+  }
+
+  Future<String> getFilepath() async {
+    final directory = await getApplicationDocumentsDirectory();
+    return directory.path;
   }
 
   void createPDF(File picture) async {
@@ -147,11 +257,32 @@ class _MyHomePageState extends State<MyHomePage> {
     file.writeAsBytes(picture.readAsBytesSync());
   }
 
-  void deleteNote(String pdfPath, String imagePath) {
-    var file = File(pdfPath);
-    file.delete();
+  void createNote(String filepath, String filename) {
+    var timestamp = DateTime.now().millisecondsSinceEpoch;
+    NoteList note = NoteList(
+      filepath + '/note_image' + noteCounter.toString() + '.jpeg',
+      filename,
+      'Note' + noteCounter.toString(),
+      timestamp,
+      'no',
+    );
+    notes.add(note);
+    saveNoteList();
+  }
+
+  void deletePermanently(String pdfPath, String imagePath) async {
+    File file = File(pdfPath);
+    file.delete;
     file = File(imagePath);
-    file.delete();
+    file.delete;
+  }
+
+  void sortDate() {
+    notes.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+  }
+
+  void sortTitle() {
+    notes.sort((a, b) => a.title.compareTo(b.title));
   }
 
   @override
@@ -179,14 +310,38 @@ class _MyHomePageState extends State<MyHomePage> {
                       const WidgetSpan(
                         child: Padding(
                           padding: EdgeInsets.symmetric(horizontal: 2.0),
-                          child: Icon(Icons.star, size: 18),
+                          child: Icon(Icons.notes, size: 18),
                         ),
                       ),
-                      TextSpan(text: ' Favorite', style: Theme.of(context).textTheme.bodyText2),
+                      TextSpan(text: ' My Notes', style: Theme.of(context).textTheme.bodyText2),
                     ],
                   ),
                 ),
                 onTap: () {
+                  Navigator.pop(context);
+                },
+              ),
+              ListTile(
+                title: RichText(
+                  text: TextSpan(
+                    children: [
+                      const WidgetSpan(
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 2.0),
+                          child: Icon(Icons.star, size: 18),
+                        ),
+                      ),
+                      TextSpan(text: ' Favorites', style: Theme.of(context).textTheme.bodyText2),
+                    ],
+                  ),
+                ),
+                onTap: () async {
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => FavoritePage(notes, favorites, viewType)),
+                  );
+                  loadFavoriteList();
+                  saveNoteList();
                   Navigator.pop(context);
                 },
               ),
@@ -204,7 +359,13 @@ class _MyHomePageState extends State<MyHomePage> {
                     ],
                   ),
                 ),
-                onTap: () {
+                onTap: () async {
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => TrashPage(notes, trash, viewType)),
+                  );
+                  loadTrashList();
+                  saveNoteList();
                   Navigator.pop(context);
                 },
               ),
@@ -226,24 +387,75 @@ class _MyHomePageState extends State<MyHomePage> {
           ),
           actions: [
             Center(
-              child: DropdownButton<String>(
+              child: PopupMenuButton<String>(
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.all(
+                    Radius.circular(10)
+                  )
+                ),
                 icon: const Icon(Icons.more_vert),
-                elevation: 16,
-                underline: DropdownButtonHideUnderline(child: Container()),
-                onChanged: (String? newValue) {
-                  setState(() {
-                    viewType = newValue!;
-                  });
+                itemBuilder: (context) {
+                  return ['Sort', 'View'].map((String value) {
+                    return PopupMenuItem(
+                      value: value,
+                      child: Text(value),
+                    );
+                  }).toList();
                 },
-                items: <String>['Grid', 'List',]
-                    .map<DropdownMenuItem<String>>((String value) {
-                      return DropdownMenuItem<String>(
-                        value: value,
-                        child: Text(value),
-                      );
-                    }).toList(),
-              ),
-            )
+                onSelected: (String? newValue) {
+                  setState(() {
+                    if(newValue == 'Sort') {
+                      showMenu<String>(
+                        shape: const RoundedRectangleBorder(
+                            borderRadius: BorderRadius.all(
+                                Radius.circular(10)
+                            )
+                        ),
+                        context: context,
+                        position: const RelativeRect.fromLTRB(100, 0, 0, 0),
+                        items: ['Date', 'Title'].map((String sortValue) {
+                          return PopupMenuItem<String>(
+                            value: sortValue,
+                            child: Text(sortValue),
+                          );
+                        }).toList(),
+                      ).then((String? value) {
+                        if(value != null) {
+                          setState(() {
+                            sortType = value;
+                            setSortType();
+                          });
+                        }
+                      });
+                    }
+                    else {
+                      showMenu<String>(
+                        shape: const RoundedRectangleBorder(
+                            borderRadius: BorderRadius.all(
+                                Radius.circular(10)
+                            )
+                        ),
+                        context: context,
+                        position: const RelativeRect.fromLTRB(100, 0, 0, 0),
+                        items: ['Grid', 'List'].map((String viewValue) {
+                          return PopupMenuItem<String>(
+                            value: viewValue,
+                            child: Text(viewValue),
+                          );
+                        }).toList(),
+                      ).then((String? value) {
+                        if(value != null) {
+                          setState(() {
+                            viewType = value;
+                            setViewType();
+                          });
+                        }
+                      });
+                    }
+                  });
+                }
+              )
+            ),
           ],
         ),
       ),
@@ -258,45 +470,78 @@ class _MyHomePageState extends State<MyHomePage> {
             itemBuilder: (BuildContext context, int index) {
               return ListTile(
                 onTap: () async {
-                  final result = await Navigator.push(
+                  await Navigator.push(
                     context,
                     MaterialPageRoute(builder: (context) => NotePage(notes[index])),
                   );
                   saveNoteList();
+                  favorites[favorites.indexWhere((element) => element.imagePath == notes[index].imagePath)].title = notes[index].title;
+                  saveFavoriteList();
                 },
                 onLongPress: () {
-                  showDialog(context: context, builder: (BuildContext context) {
-                    return AlertDialog(
-                      title: Text(notes[index].title),
-                      actionsAlignment: MainAxisAlignment.center,
-                      content: const Text(
-                        'Are you sure you want to delete this note.',
-                        textAlign: TextAlign.left,
-                      ),
-                      actions: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            TextButton(
+                  showModalBottomSheet(
+                    shape: const RoundedRectangleBorder(
+                        borderRadius: BorderRadius.only(topRight: Radius.circular(10), topLeft: Radius.circular(10))
+                    ),
+                    context: context,
+                    builder: (BuildContext context) {
+                      return Row(
+                        children: [
+                          Expanded(
+                            flex: 50,
+                            child: TextButton(
                               onPressed: () {
-                                Navigator.pop(context);
-                              },
-                              child: const Text('Cancel'),
-                            ),
-                            TextButton(
-                              onPressed: () {
-                                deleteNote(notes[index].pdfPath, notes[index].imagePath);
+                                if(notes[index].favorite == 'yes') {
+                                  favorites.removeWhere((element) => element.imagePath == notes[index].imagePath);
+                                  notes[index].favorite = 'no';
+                                }
+                                notes[index].timestamp = DateTime.now().millisecondsSinceEpoch;
+                                trash.add(notes[index]);
                                 notes.removeAt(index);
                                 saveNoteList();
+                                saveTrashList();
                                 Navigator.pop(context);
                               },
-                              child: const Text('Delete'),
+                              child: const Text('Delete',
+                                style: TextStyle(
+                                  color: Colors.red,
+                                ),
+                              ),
                             ),
-                          ],
-                        ),
-                      ],
-                    );
-                  });
+                          ),
+                          Expanded(
+                            flex: 50,
+                            child: TextButton(
+                              onPressed: () {
+                                if(notes[index].favorite == 'no') {
+                                  notes[index].favorite = 'yes';
+                                  favorites.add(notes[index]);
+                                }
+                                else {
+                                  favorites.removeWhere((element) => element.imagePath == notes[index].imagePath);
+                                  notes[index].favorite = 'no';
+                                }
+                                saveNoteList();
+                                saveFavoriteList();
+                                Navigator.pop(context);
+                              },
+                              child: notes[index].favorite == 'no' ?
+                              const Text('Favorite',
+                                style: TextStyle(
+                                  color: Colors.blue,
+                                ),
+                              ) :
+                              const Text('Unfavorite',
+                                style: TextStyle(
+                                  color: Colors.red,
+                                ),
+                              )
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  );
                 },
                 title: Column(
                   children: [
@@ -318,7 +563,13 @@ class _MyHomePageState extends State<MyHomePage> {
                     ),
                     Expanded(
                       flex: 50,
-                      child: Text('10/26',
+                      child: Text(
+                          DateTime.fromMillisecondsSinceEpoch(notes[index].timestamp).year == DateTime.now().year ?
+                          DateTime.fromMillisecondsSinceEpoch(notes[index].timestamp).month.toString() + '/' +
+                          DateTime.fromMillisecondsSinceEpoch(notes[index].timestamp).day.toString() :
+                          DateTime.fromMillisecondsSinceEpoch(notes[index].timestamp).month.toString() + '/' +
+                          DateTime.fromMillisecondsSinceEpoch(notes[index].timestamp).day.toString() + '/' +
+                          DateTime.fromMillisecondsSinceEpoch(notes[index].timestamp).year.toString(),
                           style: Theme.of(context).textTheme.bodyText2
                       ),
                     ),
@@ -332,45 +583,78 @@ class _MyHomePageState extends State<MyHomePage> {
             itemBuilder: (BuildContext context, int index) {
               return ListTile(
                 onTap: () async {
-                  final result = await Navigator.push(
+                  await Navigator.push(
                     context,
                     MaterialPageRoute(builder: (context) => NotePage(notes[index])),
                   );
                   saveNoteList();
+                  favorites[favorites.indexWhere((element) => element.imagePath == notes[index].imagePath)].title = notes[index].title;
+                  saveFavoriteList();
                 },
                 onLongPress: () {
-                  showDialog(context: context, builder: (BuildContext context) {
-                    return AlertDialog(
-                      title: Text(notes[index].title),
-                      actionsAlignment: MainAxisAlignment.center,
-                      content: const Text(
-                        'Are you sure you want to delete this note.',
-                        textAlign: TextAlign.left,
-                      ),
-                      actions: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            TextButton(
+                  showModalBottomSheet(
+                    shape: const RoundedRectangleBorder(
+                        borderRadius: BorderRadius.only(topRight: Radius.circular(10), topLeft: Radius.circular(10))
+                    ),
+                    context: context,
+                    builder: (BuildContext context) {
+                      return Row(
+                        children: [
+                          Expanded(
+                            flex: 50,
+                            child: TextButton(
                               onPressed: () {
-                                Navigator.pop(context);
-                              },
-                              child: const Text('Cancel'),
-                            ),
-                            TextButton(
-                              onPressed: () {
-                                deleteNote(notes[index].pdfPath, notes[index].imagePath);
+                                if(notes[index].favorite == 'yes') {
+                                  favorites.removeWhere((element) => element.imagePath == notes[index].imagePath);
+                                  notes[index].favorite = 'no';
+                                }
+                                notes[index].timestamp = DateTime.now().millisecondsSinceEpoch;
+                                trash.add(notes[index]);
                                 notes.removeAt(index);
                                 saveNoteList();
+                                saveTrashList();
                                 Navigator.pop(context);
                               },
-                              child: const Text('Delete'),
+                              child: const Text('Delete',
+                                style: TextStyle(
+                                  color: Colors.red,
+                                ),
+                              ),
                             ),
-                          ],
-                        ),
-                      ],
-                    );
-                  });
+                          ),
+                          Expanded(
+                            flex: 50,
+                            child: TextButton(
+                                onPressed: () {
+                                  if(notes[index].favorite == 'no') {
+                                    notes[index].favorite = 'yes';
+                                    favorites.add(notes[index]);
+                                  }
+                                  else {
+                                    favorites.removeWhere((element) => element.imagePath == notes[index].imagePath);
+                                    notes[index].favorite = 'no';
+                                  }
+                                  saveNoteList();
+                                  saveFavoriteList();
+                                  Navigator.pop(context);
+                                },
+                                child: notes[index].favorite == 'no' ?
+                                const Text('Favorite',
+                                  style: TextStyle(
+                                    color: Colors.blue,
+                                  ),
+                                ) :
+                                const Text('Unfavorite',
+                                  style: TextStyle(
+                                    color: Colors.red,
+                                  ),
+                                )
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  );
                 },
                 title: SizedBox(
                   height: 100,
@@ -379,7 +663,6 @@ class _MyHomePageState extends State<MyHomePage> {
                       Container(
                         width: 85,
                         height: 85,
-                        //margin: const EdgeInsets.only(right: 10),
                         decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(5),
                             image: DecorationImage(
@@ -396,7 +679,12 @@ class _MyHomePageState extends State<MyHomePage> {
                             Text(notes[index].title,
                                 style: Theme.of(context).textTheme.bodyText2
                             ),
-                            Text('10/26',
+                            Text(DateTime.fromMillisecondsSinceEpoch(notes[index].timestamp).year == DateTime.now().year ?
+                                DateTime.fromMillisecondsSinceEpoch(notes[index].timestamp).month.toString() + '/' +
+                                DateTime.fromMillisecondsSinceEpoch(notes[index].timestamp).day.toString() :
+                                DateTime.fromMillisecondsSinceEpoch(notes[index].timestamp).month.toString() + '/' +
+                                DateTime.fromMillisecondsSinceEpoch(notes[index].timestamp).day.toString() + '/' +
+                                DateTime.fromMillisecondsSinceEpoch(notes[index].timestamp).year.toString(),
                                 style: Theme.of(context).textTheme.bodyText2
                             )
                           ]
@@ -425,6 +713,7 @@ class _MyHomePageState extends State<MyHomePage> {
             label: 'Take Picture',
             child: const Icon(Icons.add_a_photo),
             backgroundColor: Colors.lightBlueAccent,
+            foregroundColor: Theme.of(context).cardColor,
           ),
           SpeedDialChild(
             onTap: () async {
@@ -440,15 +729,8 @@ class _MyHomePageState extends State<MyHomePage> {
             label: 'Add Image',
             child: const Icon(Icons.add_photo_alternate),
             backgroundColor: Colors.lightBlueAccent,
+            foregroundColor: Theme.of(context).cardColor,
           ),
-          // SpeedDialChild(
-          //   onTap: () {
-          //
-          //   },
-          //   label: 'Create Folder',
-          //   child: const Icon(Icons.create_new_folder_rounded),
-          //   backgroundColor: Colors.lightBlueAccent,
-          // ),
         ],
       ),// This trailing comma makes auto-formatting nicer for build methods.
     );

@@ -10,11 +10,9 @@ import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 import 'note_list.dart';
 
 class NotePage extends StatefulWidget {
-  //const NotePage({Key? key}) : super(key: key);
+  NotePage(this.note, {Key? key}) : super(key: key);
 
   NoteList note;
-
-  NotePage(this.note, {Key? key}) : super(key: key);
 
   @override
   _NotePageState createState() => _NotePageState();
@@ -22,15 +20,18 @@ class NotePage extends StatefulWidget {
 
 class _NotePageState extends State<NotePage> {
 
-  TextEditingController titleController = TextEditingController();
   TextEditingController pageController = TextEditingController();
   TextEditingController moveController = TextEditingController();
+  TextEditingController titleController = TextEditingController();
   bool isEditingText = false;
 
   @override
   void initState() {
     super.initState();
     titleController = TextEditingController(text: widget.note.title);
+    setState(() {
+
+    });
   }
 
   void modifyPDF(File picture) {
@@ -52,7 +53,7 @@ class _NotePageState extends State<NotePage> {
     file.writeAsBytes(document.save());
     document.dispose();
     setState(() {
-
+      widget.note.timestamp = DateTime.now().millisecondsSinceEpoch;
     });
   }
 
@@ -64,23 +65,13 @@ class _NotePageState extends State<NotePage> {
     }
   }
 
-  void movePage(int pageNum, int moveNum) {
-    PdfDocument document = PdfDocument(inputBytes: File(widget.note.pdfPath).readAsBytesSync());
-    if(pageNum < document.pages.count) {
-      if(moveNum != pageNum && moveNum > 0 && moveNum < document.pages.count) {
-        PdfPage page = document.pages[pageNum - 1];
-        document.pages.insert(moveNum - 1);
-        document.pages.removeAt(pageNum - 1);
-      }
-    }
-  }
-
   Widget editTitleTextField() {
     if(isEditingText) {
       return TextField(
         onSubmitted: (newValue) {
           setState(() {
             widget.note.title = newValue;
+            widget.note.timestamp = DateTime.now().millisecondsSinceEpoch;
             isEditingText = false;
           });
         },
@@ -94,8 +85,8 @@ class _NotePageState extends State<NotePage> {
           isEditingText = true;
         });
       },
-      child: Text(
-        widget.note.title,
+      child: Text(widget.note.title,
+        style: Theme.of(context).textTheme.headline6,
       ),
     );
   }
@@ -104,12 +95,15 @@ class _NotePageState extends State<NotePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios),
           onPressed: () {
             Navigator.pop(context, widget.note.title);
           },
         ),
+        iconTheme: IconThemeData(color: Theme.of(context).iconTheme.color),
         title: editTitleTextField(),
       ),
       body: Column(
@@ -117,8 +111,10 @@ class _NotePageState extends State<NotePage> {
           Expanded(
             flex: 90,
             child: SfPdfViewer.file(
-              File(widget.note.pdfPath), pageSpacing: 10,
+              File(widget.note.pdfPath),
+              pageSpacing: 10,
               canShowScrollHead: false,
+              pageLayoutMode: PdfPageLayoutMode.single,
             ),
           ),
           Expanded(
@@ -147,62 +143,6 @@ class _NotePageState extends State<NotePage> {
                     modifyPDF(imageFile);
                   },
                   icon: const Icon(Icons.add_photo_alternate)
-                ),
-                const Spacer(),
-                IconButton(
-                  onPressed: () {
-                    showDialog(context: context, builder: (BuildContext context) {
-                      return AlertDialog(
-                        title: const Text('Move Page'),
-                        content: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            TextField(
-                              controller: pageController,
-                              decoration: const InputDecoration(
-                                border: OutlineInputBorder(),
-                                labelText: 'Enter page to move:',
-                              ),
-                            ),
-                            const SizedBox(height: 5),
-                            TextField(
-                              controller: moveController,
-                              decoration: const InputDecoration(
-                                border: OutlineInputBorder(),
-                                labelText: 'Enter position to move to:',
-                              ),
-                            ),
-                          ],
-                        ),
-                        actions: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.end,
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              TextButton(
-                                onPressed: () {
-                                  Navigator.pop(context);
-                                  pageController.clear();
-                                  moveController.clear();
-                                },
-                                child: const Text('Cancel'),
-                              ),
-                              TextButton(
-                                onPressed: () {
-                                  movePage(int.parse(pageController.text), int.parse(moveController.text));
-                                  Navigator.pop(context);
-                                  pageController.clear();
-                                  moveController.clear();
-                                },
-                                child: const Text('Enter'),
-                              ),
-                            ],
-                          ),
-                        ],
-                      );
-                    });
-                  },
-                  icon: const Icon(Icons.reorder),
                 ),
                 const Spacer(),
                 IconButton(
@@ -252,4 +192,5 @@ class _NotePageState extends State<NotePage> {
       ),
     );
   }
+
 }
