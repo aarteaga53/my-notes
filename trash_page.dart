@@ -1,9 +1,9 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'note_list.dart';
 
+//ignore: must_be_immutable
 class TrashPage extends StatefulWidget {
   TrashPage(this.notes, this.trash, this.viewType, {Key? key}) : super(key: key);
 
@@ -48,18 +48,79 @@ class _TrashPageState extends State<TrashPage> {
     return directory.path;
   }
 
+  void showBottom(int index) {
+    showModalBottomSheet(
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.only(topRight: Radius.circular(10), topLeft: Radius.circular(10))
+      ),
+      context: context,
+      builder: (BuildContext context) {
+        return Row(
+          children: [
+            Expanded(
+              flex: 50,
+              child: TextButton(
+                onPressed: () {
+                  deletePermanently(widget.trash[index].pdfPath, widget.trash[index].imagePath);
+                  widget.trash.removeAt(index);
+                  saveTrashList();
+                  Navigator.pop(context);
+                },
+                child: const Text('Delete',
+                  style: TextStyle(
+                    color: Colors.red,
+                  ),
+                ),
+              ),
+            ),
+            Expanded(
+              flex: 50,
+              child: TextButton(
+                onPressed: () {
+                  widget.trash[index].timestamp = DateTime.now().millisecondsSinceEpoch;
+                  widget.notes.add(widget.trash[index]);
+                  widget.trash.removeAt(index);
+                  saveTrashList();
+                  Navigator.pop(context);
+                },
+                child: const Text('Restore',
+                  style: TextStyle(
+                    color: Colors.blue,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  String timestampFormat(int index) {
+    var time = DateTime.fromMillisecondsSinceEpoch(widget.trash[index].timestamp);
+    var current = DateTime.now();
+    if(time.day == current.day && time.year == current.year) {
+      if(time.hour > 12) {
+        return (time.hour - 12).toString() + ':' + time.minute.toString() + ' pm';
+      }
+      else {
+        return time.hour.toString() + ':' + time.minute.toString() + ' am';
+      }
+    }
+    else if(time.year == time.year) {
+      return time.month.toString() + '/' + time.day.toString();
+    }
+    else {
+      return time.month.toString() + '/' + time.day.toString() + '/' + time.year.toString();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(100.0),
+        preferredSize: const Size.fromHeight(75.0),
         child: AppBar(
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios),
-            onPressed: () {
-              Navigator.pop(context, widget.viewType);
-            },
-          ),
           backgroundColor: Colors.transparent,
           elevation: 0,
           iconTheme: IconThemeData(color: Theme.of(context).iconTheme.color),
@@ -119,83 +180,30 @@ class _TrashPageState extends State<TrashPage> {
 
             },
             onLongPress: () {
-              showModalBottomSheet(
-                shape: const RoundedRectangleBorder(
-                  borderRadius: BorderRadius.only(topRight: Radius.circular(10), topLeft: Radius.circular(10))
-                ),
-                context: context,
-                builder: (BuildContext context) {
-                  return Row(
-                    children: [
-                      Expanded(
-                        flex: 50,
-                        child: TextButton(
-                          onPressed: () {
-                            deletePermanently(widget.trash[index].pdfPath, widget.trash[index].imagePath);
-                            widget.trash.removeAt(index);
-                            saveTrashList();
-                            Navigator.pop(context);
-                          },
-                          child: const Text('Delete',
-                            style: TextStyle(
-                              color: Colors.red,
-                            ),
-                          ),
-                        ),
-                      ),
-                      Expanded(
-                        flex: 50,
-                        child: TextButton(
-                          onPressed: () {
-                            widget.trash[index].timestamp = DateTime.now().millisecondsSinceEpoch;
-                            widget.notes.add(widget.trash[index]);
-                            widget.trash.removeAt(index);
-                            saveTrashList();
-                            Navigator.pop(context);
-                          },
-                          child: const Text('Restore',
-                            style: TextStyle(
-                              color: Colors.blue,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  );
-                },
-              );
+              showBottom(index);
             },
-            title: Column(
-              children: [
-                Container(
-                  height: 100,
-                  decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(5),
-                      image: DecorationImage(
-                        image: FileImage(File(widget.trash[index].imagePath)),
-                        fit: BoxFit.cover,
-                      )
-                  ),
+            title: Container(
+              height: 100,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(5),
+                image: DecorationImage(
+                  image: FileImage(File(widget.trash[index].imagePath)),
+                  fit: BoxFit.cover,
                 ),
-                Expanded(
-                  flex: 50,
-                  child: Text(widget.trash[index].title,
+              ),
+            ),
+            subtitle: Center(
+              child: Column(
+                children: [
+                  Text(widget.trash[index].title,
                       style: Theme.of(context).textTheme.bodyText2
                   ),
-                ),
-                Expanded(
-                  flex: 50,
-                  child: Text(
-                      DateTime.fromMillisecondsSinceEpoch(widget.trash[index].timestamp).year == DateTime.now().year ?
-                      DateTime.fromMillisecondsSinceEpoch(widget.trash[index].timestamp).month.toString() + '/' +
-                          DateTime.fromMillisecondsSinceEpoch(widget.trash[index].timestamp).day.toString() :
-                      DateTime.fromMillisecondsSinceEpoch(widget.trash[index].timestamp).month.toString() + '/' +
-                          DateTime.fromMillisecondsSinceEpoch(widget.trash[index].timestamp).day.toString() + '/' +
-                          DateTime.fromMillisecondsSinceEpoch(widget.trash[index].timestamp).year.toString(),
-                      style: Theme.of(context).textTheme.bodyText2
+                  Text(
+                    timestampFormat(index),
+                    style: Theme.of(context).textTheme.bodyText2,
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           );
         },
@@ -208,51 +216,7 @@ class _TrashPageState extends State<TrashPage> {
 
             },
             onLongPress: () {
-              showModalBottomSheet(
-                shape: const RoundedRectangleBorder(
-                    borderRadius: BorderRadius.only(topRight: Radius.circular(10), topLeft: Radius.circular(10))
-                ),
-                context: context,
-                builder: (BuildContext context) {
-                  return Row(
-                    children: [
-                      Expanded(
-                        flex: 50,
-                        child: TextButton(
-                          onPressed: () {
-                            deletePermanently(widget.trash[index].pdfPath, widget.trash[index].imagePath);
-                            widget.trash.removeAt(index);
-                            saveTrashList();
-                            Navigator.pop(context);
-                          },
-                          child: const Text('Delete',
-                            style: TextStyle(
-                              color: Colors.red,
-                            ),
-                          ),
-                        ),
-                      ),
-                      Expanded(
-                        flex: 50,
-                        child: TextButton(
-                          onPressed: () {
-                            widget.trash[index].timestamp = DateTime.now().millisecondsSinceEpoch;
-                            widget.notes.add(widget.trash[index]);
-                            widget.trash.removeAt(index);
-                            saveTrashList();
-                            Navigator.pop(context);
-                          },
-                          child: const Text('Restore',
-                            style: TextStyle(
-                              color: Colors.blue,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  );
-                },
-              );
+              showBottom(index);
             },
             title: SizedBox(
               height: 100,
@@ -261,32 +225,29 @@ class _TrashPageState extends State<TrashPage> {
                   Container(
                     width: 85,
                     height: 85,
+                    margin: const EdgeInsets.only(right: 25),
                     decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(5),
-                        image: DecorationImage(
-                          image: FileImage(File(widget.trash[index].imagePath)),
-                          fit: BoxFit.cover,
-                        )
+                      borderRadius: BorderRadius.circular(5),
+                      image: DecorationImage(
+                        image: FileImage(File(widget.trash[index].imagePath)),
+                        fit: BoxFit.cover,
+                      ),
                     ),
                   ),
-                  const Spacer(),
                   Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(widget.trash[index].title,
-                            style: Theme.of(context).textTheme.bodyText2
-                        ),
-                        Text(DateTime.fromMillisecondsSinceEpoch(widget.trash[index].timestamp).year == DateTime.now().year ?
-                        DateTime.fromMillisecondsSinceEpoch(widget.trash[index].timestamp).month.toString() + '/' +
-                            DateTime.fromMillisecondsSinceEpoch(widget.trash[index].timestamp).day.toString() :
-                        DateTime.fromMillisecondsSinceEpoch(widget.trash[index].timestamp).month.toString() + '/' +
-                            DateTime.fromMillisecondsSinceEpoch(widget.trash[index].timestamp).day.toString() + '/' +
-                            DateTime.fromMillisecondsSinceEpoch(widget.trash[index].timestamp).year.toString(),
-                            style: Theme.of(context).textTheme.bodyText2
-                        )
-                      ],
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(widget.trash[index].title,
+                          style: Theme.of(context).textTheme.bodyText2
+                      ),
+                      Text(
+                        timestampFormat(index),
+                        style: Theme.of(context).textTheme.bodyText2,
+                      ),
+                    ],
                   ),
+                  const Spacer(),
+                  const Icon(Icons.star_border),
                 ],
               ),
             ),

@@ -6,9 +6,9 @@ import 'package:flutter/widgets.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
-
 import 'note_list.dart';
 
+//ignore: must_be_immutable
 class NotePage extends StatefulWidget {
   NotePage(this.note, {Key? key}) : super(key: key);
 
@@ -97,12 +97,6 @@ class _NotePageState extends State<NotePage> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios),
-          onPressed: () {
-            Navigator.pop(context, widget.note.title);
-          },
-        ),
         iconTheme: IconThemeData(color: Theme.of(context).iconTheme.color),
         title: editTitleTextField(),
       ),
@@ -149,13 +143,18 @@ class _NotePageState extends State<NotePage> {
                   onPressed: () {
                     showDialog(context: context, builder: (BuildContext context) {
                       return AlertDialog(
+                        shape: const RoundedRectangleBorder(
+                            borderRadius: BorderRadius.all(
+                                Radius.circular(10)
+                            )
+                        ),
                         title: const Text('Delete Page'),
                         content: TextField(
-                            controller: pageController,
-                            decoration: const InputDecoration(
-                              border: OutlineInputBorder(),
-                              labelText: 'Enter page number:',
-                            )
+                          controller: pageController,
+                          decoration: const InputDecoration(
+                            border: OutlineInputBorder(),
+                            labelText: 'Enter page number:',
+                          ),
                         ),
                         actions: [
                           Row(
@@ -192,5 +191,4 @@ class _NotePageState extends State<NotePage> {
       ),
     );
   }
-
 }
