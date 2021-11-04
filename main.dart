@@ -3,8 +3,10 @@ import 'dart:typed_data';
 import 'package:camera/camera.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_speed_dial/flutter_speed_dial.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
@@ -52,6 +54,7 @@ class _MyHomePageState extends State<MyHomePage> {
   int noteCounter = 0;
   String viewType = 'Grid';
   String sortType = 'Date';
+  bool isFabVisible = true;
 
   @override
   void initState() {
@@ -115,10 +118,12 @@ class _MyHomePageState extends State<MyHomePage> {
 
       List<String> lines = file.readAsLinesSync();
 
-      for(int i = 1; i < lines.length - 4; i++) {
-        NoteList note = NoteList(lines[i], lines[++i], lines[++i], int.parse(lines[++i]), lines[++i]);
+      for(int i = 1; i < lines.length; i++) {
+        List line = lines[i].split(',');
+        NoteList note = NoteList(line[0], line[1], line[2], int.parse(line[3]), line[4]);
         temp.add(note);
       }
+
       setState(() {
         notes = temp;
       });
@@ -133,10 +138,12 @@ class _MyHomePageState extends State<MyHomePage> {
 
       List<String> lines = file.readAsLinesSync();
 
-      for(int i = 1; i < lines.length - 4; i++) {
-        NoteList note = NoteList(lines[i], lines[++i], lines[++i], int.parse(lines[++i]), lines[++i]);
+      for(int i = 1; i < lines.length; i++) {
+        List line = lines[i].split(',');
+        NoteList note = NoteList(line[0], line[1], line[2], int.parse(line[3]), line[4]);
         temp.add(note);
       }
+
       setState(() {
         favorites = temp;
       });
@@ -151,18 +158,12 @@ class _MyHomePageState extends State<MyHomePage> {
 
       List<String> lines = file.readAsLinesSync();
 
-      for(int i = 1; i < lines.length - 4; i++) {
-        NoteList note = NoteList(lines[i], lines[++i], lines[++i], int.parse(lines[++i]), lines[++i]);
-        var date = DateTime.fromMillisecondsSinceEpoch(note.timestamp).add(const Duration(days: 30));
-        var now = DateTime.now();
-        if(date.isAfter(now)) {
-          temp.add(note);
-        }
-        else {
-          deletePermanently(note.pdfPath, note.imagePath);
-          saveTrashList();
-        }
+      for(int i = 1; i < lines.length; i++) {
+        List line = lines[i].split(',');
+        NoteList note = NoteList(line[0], line[1], line[2], int.parse(line[3]), line[4]);
+        temp.add(note);
       }
+
       setState(() {
         trash = temp;
       });
@@ -203,14 +204,13 @@ class _MyHomePageState extends State<MyHomePage> {
     setSortType();
     String filepath = await getFilepath();
     final file = File('$filepath/noteList.txt');
-    file.writeAsStringSync('Image Path, Pdf Path, Title, Timestamp, Favorite\n');
-    
+    file.writeAsStringSync('Image Path,Pdf Path,Title,Timestamp,Favorite\n');
+
     for (var element in notes) {
-      file.writeAsStringSync(element.imagePath + '\n', mode: FileMode.append);
-      file.writeAsStringSync(element.pdfPath + '\n', mode: FileMode.append);
-      file.writeAsStringSync(element.title + '\n', mode: FileMode.append);
-      file.writeAsStringSync(element.timestamp.toString() + '\n', mode: FileMode.append);
-      file.writeAsStringSync(element.favorite + '\n', mode: FileMode.append);
+      file.writeAsStringSync(element.imagePath + ',' + element.pdfPath + ',' +
+          element.title + ',' + element.timestamp.toString() + ',' + element.favorite + '\n',
+          mode:  FileMode.append
+      );
     }
     setState(() {
 
@@ -222,15 +222,15 @@ class _MyHomePageState extends State<MyHomePage> {
 
     String filepath = await getFilepath();
     final file = File('$filepath/favoriteList.txt');
-    file.writeAsStringSync('Image Path, Pdf Path, Title, Timestamp, Favorite\n');
+    file.writeAsStringSync('Image Path,Pdf Path,Title,Timestamp,Favorite\n');
 
     for (var element in favorites) {
-      file.writeAsStringSync(element.imagePath + '\n', mode: FileMode.append);
-      file.writeAsStringSync(element.pdfPath + '\n', mode: FileMode.append);
-      file.writeAsStringSync(element.title + '\n', mode: FileMode.append);
-      file.writeAsStringSync(element.timestamp.toString() + '\n', mode: FileMode.append);
-      file.writeAsStringSync(element.favorite + '\n', mode: FileMode.append);
+      file.writeAsStringSync(element.imagePath + ',' + element.pdfPath + ',' +
+          element.title + ',' + element.timestamp.toString() + ',' + element.favorite + '\n',
+          mode:  FileMode.append
+      );
     }
+
     setState(() {
 
     });
@@ -241,14 +241,13 @@ class _MyHomePageState extends State<MyHomePage> {
 
     String filepath = await getFilepath();
     final file = File('$filepath/trashList.txt');
-    file.writeAsStringSync('Image Path, Pdf Path, Title, Timestamp, Favorite\n');
+    file.writeAsStringSync('Image Path,Pdf Path,Title,Timestamp,Favorite\n');
 
     for (var element in trash) {
-      file.writeAsStringSync(element.imagePath + '\n', mode: FileMode.append);
-      file.writeAsStringSync(element.pdfPath + '\n', mode: FileMode.append);
-      file.writeAsStringSync(element.title + '\n', mode: FileMode.append);
-      file.writeAsStringSync(element.timestamp.toString() + '\n', mode: FileMode.append);
-      file.writeAsStringSync(element.favorite + '\n', mode: FileMode.append);
+      file.writeAsStringSync(element.imagePath + ',' + element.pdfPath + ',' +
+          element.title + ',' + element.timestamp.toString() + ',' + element.favorite + '\n',
+          mode:  FileMode.append
+      );
     }
     setState(() {
 
@@ -264,13 +263,13 @@ class _MyHomePageState extends State<MyHomePage> {
     PdfDocument document = PdfDocument();
     Uint8List imageData = picture.readAsBytesSync();
     PdfBitmap image = PdfBitmap(imageData);
-    document.pageSettings.setMargins(0);
+    document.pageSettings.margins.all = 0;
     PdfPage page = document.pages.add();
+
     page.graphics.drawImage(
-        image,
-        Rect.fromLTWH(0, 0, page.getClientSize().width, page.getClientSize().height)
+      image,
+      Rect.fromLTWH(0, 0, page.getClientSize().width, page.getClientSize().height),
     );
-    page = document.pages.add();
 
     savePDF(document, picture);
   }
@@ -304,11 +303,37 @@ class _MyHomePageState extends State<MyHomePage> {
     saveNoteList();
   }
 
+  void deleteNote(int index) {
+    if(notes[index].favorite == 'yes') {
+      favorites.removeWhere((element) => element.imagePath == notes[index].imagePath);
+      notes[index].favorite = 'no';
+    }
+    notes[index].timestamp = DateTime.now().millisecondsSinceEpoch;
+    trash.add(notes[index]);
+    notes.removeAt(index);
+    saveNoteList();
+    saveFavoriteList();
+    saveTrashList();
+  }
+
   void deletePermanently(String pdfPath, String imagePath) async {
     File file = File(pdfPath);
     file.delete;
     file = File(imagePath);
     file.delete;
+  }
+
+  void toggleFavoriteNote(int index) {
+    if(notes[index].favorite == 'no') {
+      notes[index].favorite = 'yes';
+      favorites.add(notes[index]);
+    }
+    else {
+      favorites.removeWhere((element) => element.imagePath == notes[index].imagePath);
+      notes[index].favorite = 'no';
+    }
+    saveNoteList();
+    saveFavoriteList();
   }
 
   void sortDate() {
@@ -332,16 +357,7 @@ class _MyHomePageState extends State<MyHomePage> {
               flex: 50,
               child: TextButton(
                 onPressed: () {
-                  if(notes[index].favorite == 'yes') {
-                    favorites.removeWhere((element) => element.imagePath == notes[index].imagePath);
-                    notes[index].favorite = 'no';
-                  }
-                  notes[index].timestamp = DateTime.now().millisecondsSinceEpoch;
-                  trash.add(notes[index]);
-                  notes.removeAt(index);
-                  saveNoteList();
-                  saveFavoriteList();
-                  saveTrashList();
+                  deleteNote(index);
                   Navigator.pop(context);
                 },
                 child: const Text('Delete',
@@ -355,16 +371,7 @@ class _MyHomePageState extends State<MyHomePage> {
               flex: 50,
               child: TextButton(
                 onPressed: () {
-                  if(notes[index].favorite == 'no') {
-                    notes[index].favorite = 'yes';
-                    favorites.add(notes[index]);
-                  }
-                  else {
-                    favorites.removeWhere((element) => element.imagePath == notes[index].imagePath);
-                    notes[index].favorite = 'no';
-                  }
-                  saveNoteList();
-                  saveFavoriteList();
+                  toggleFavoriteNote(index);
                   Navigator.pop(context);
                 },
                 child: notes[index].favorite == 'no' ?
@@ -396,22 +403,18 @@ class _MyHomePageState extends State<MyHomePage> {
     saveFavoriteList();
   }
 
-  String timestampFormat(int index) {
+  String timeFormat(int index) {
     var time = DateTime.fromMillisecondsSinceEpoch(notes[index].timestamp);
     var current = DateTime.now();
+
     if(time.day == current.day && time.year == current.year) {
-      if(time.hour > 12) {
-        return (time.hour - 12).toString() + ':' + time.minute.toString() + ' pm';
-      }
-      else {
-        return time.hour.toString() + ':' + time.minute.toString() + ' am';
-      }
+      return DateFormat('h:mm a').format(time);
     }
-    else if(time.year == time.year) {
-      return time.month.toString() + '/' + time.day.toString();
+    if(time.year == time.year) {
+      return DateFormat.Md().format(time);
     }
     else {
-      return time.month.toString() + '/' + time.day.toString() + '/' + time.year.toString();
+      return DateFormat.yMd().format(time);
     }
   }
 
@@ -425,7 +428,7 @@ class _MyHomePageState extends State<MyHomePage> {
             padding: EdgeInsets.zero,
             children: [
               SizedBox(
-                height: 110,
+                height: 90,
                 child: DrawerHeader(
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.start,
@@ -451,6 +454,7 @@ class _MyHomePageState extends State<MyHomePage> {
                           ).then((String? value) {
                             if(value != null) {
                               resetApp();
+                              Navigator.pop(context);
                             }
                           });
                         },
@@ -458,7 +462,7 @@ class _MyHomePageState extends State<MyHomePage> {
                     ],
                   ),
                   decoration: const BoxDecoration(
-                    color: Colors.transparent,
+                    color: Colors.blueGrey,
                   ),
                 ),
               ),
@@ -476,9 +480,7 @@ class _MyHomePageState extends State<MyHomePage> {
                     ],
                   ),
                 ),
-                onTap: () {
-                  Navigator.pop(context);
-                },
+                onTap: () => Navigator.pop(context),
               ),
               ListTile(
                 title: RichText(
@@ -532,108 +534,114 @@ class _MyHomePageState extends State<MyHomePage> {
           )
         ),
       ),
-      appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(75.0),
-        child: AppBar(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          iconTheme: IconThemeData(color: Theme.of(context).iconTheme.color),
-          title: Center(
-            child: Text(
-              widget.title,
-              style: Theme.of(context).textTheme.headline6,
+      appBar: AppBar(
+        backgroundColor: Colors.blueGrey,
+        iconTheme: IconThemeData(color: Theme.of(context).iconTheme.color),
+        title: Center(
+          child: Text(
+            widget.title,
+            style: Theme.of(context).textTheme.headline6,
+          ),
+        ),
+        actions: [
+          Center(
+            child: PopupMenuButton<String>(
+              shape: const RoundedRectangleBorder(
+                borderRadius: BorderRadius.all(
+                  Radius.circular(10),
+                ),
+              ),
+              icon: const Icon(Icons.more_vert),
+              itemBuilder: (context) {
+                return ['Sort', 'View'].map((String value) {
+                  return PopupMenuItem(
+                    value: value,
+                    child: Text(value),
+                  );
+                }).toList();
+              },
+              onSelected: (String? newValue) {
+                setState(() {
+                  if(newValue == 'Sort') {
+                    showMenu<String>(
+                      shape: const RoundedRectangleBorder(
+                        borderRadius: BorderRadius.all(
+                          Radius.circular(10),
+                        ),
+                      ),
+                      context: context,
+                      position: const RelativeRect.fromLTRB(100, 0, 0, 0),
+                      items: ['Date', 'Title'].map((String sortValue) {
+                        return PopupMenuItem<String>(
+                          value: sortValue,
+                          child: Text(sortValue),
+                        );
+                      }).toList(),
+                    ).then((String? value) {
+                      if(value != null) {
+                        setState(() {
+                          sortType = value;
+                          setSortType();
+                        });
+                      }
+                    });
+                  }
+                  else {
+                    showMenu<String>(
+                      shape: const RoundedRectangleBorder(
+                          borderRadius: BorderRadius.all(
+                              Radius.circular(10)
+                          )
+                      ),
+                      context: context,
+                      position: const RelativeRect.fromLTRB(100, 0, 0, 0),
+                      items: ['Grid', 'List'].map((String viewValue) {
+                        return PopupMenuItem<String>(
+                          value: viewValue,
+                          child: Text(viewValue),
+                        );
+                      }).toList(),
+                    ).then((String? value) {
+                      if(value != null) {
+                        setState(() {
+                          viewType = value;
+                          setViewType();
+                        });
+                      }
+                    });
+                  }
+                });
+              }
             ),
           ),
-          actions: [
-            Center(
-              child: PopupMenuButton<String>(
-                shape: const RoundedRectangleBorder(
-                  borderRadius: BorderRadius.all(
-                    Radius.circular(10)
-                  )
-                ),
-                icon: const Icon(Icons.more_vert),
-                itemBuilder: (context) {
-                  return ['Sort', 'View'].map((String value) {
-                    return PopupMenuItem(
-                      value: value,
-                      child: Text(value),
-                    );
-                  }).toList();
-                },
-                onSelected: (String? newValue) {
-                  setState(() {
-                    if(newValue == 'Sort') {
-                      showMenu<String>(
-                        shape: const RoundedRectangleBorder(
-                            borderRadius: BorderRadius.all(
-                                Radius.circular(10)
-                            )
-                        ),
-                        context: context,
-                        position: const RelativeRect.fromLTRB(100, 0, 0, 0),
-                        items: ['Date', 'Title'].map((String sortValue) {
-                          return PopupMenuItem<String>(
-                            value: sortValue,
-                            child: Text(sortValue),
-                          );
-                        }).toList(),
-                      ).then((String? value) {
-                        if(value != null) {
-                          setState(() {
-                            sortType = value;
-                            setSortType();
-                          });
-                        }
-                      });
-                    }
-                    else {
-                      showMenu<String>(
-                        shape: const RoundedRectangleBorder(
-                            borderRadius: BorderRadius.all(
-                                Radius.circular(10)
-                            )
-                        ),
-                        context: context,
-                        position: const RelativeRect.fromLTRB(100, 0, 0, 0),
-                        items: ['Grid', 'List'].map((String viewValue) {
-                          return PopupMenuItem<String>(
-                            value: viewValue,
-                            child: Text(viewValue),
-                          );
-                        }).toList(),
-                      ).then((String? value) {
-                        if(value != null) {
-                          setState(() {
-                            viewType = value;
-                            setViewType();
-                          });
-                        }
-                      });
-                    }
-                  });
-                }
-              )
-            ),
-          ],
-        ),
+        ],
       ),
       body: viewType == 'Grid' ?
-          GridView.builder(
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 3,
-              crossAxisSpacing: 5,
-              mainAxisSpacing: 25,
-            ),
-            itemCount: notes.length,
-            itemBuilder: (BuildContext context, int index) {
-              return ListTile(
-                onTap: () {
-                  noteTap(index);
-                },
-                onLongPress: () {
-                  showBottom(index);
-                },
+      NotificationListener<UserScrollNotification>(
+        onNotification: (notification) {
+          if(notification.direction == ScrollDirection.forward) {
+            if(!isFabVisible) setState(() => isFabVisible = true);
+          }
+          else if(notification.direction == ScrollDirection.reverse) {
+            if(isFabVisible) setState(() => isFabVisible = false);
+          }
+          return true;
+          },
+        child: GridView.builder(
+          padding: const EdgeInsets.only(top: 5, bottom: 5),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 3,
+            crossAxisSpacing: 5,
+            mainAxisSpacing: 50,
+            childAspectRatio: MediaQuery.of(context).size.width /
+                (MediaQuery.of(context).size.height / 1.65),
+              ),
+          itemCount: notes.length,
+          itemBuilder: (BuildContext context, int index) {
+            return Card(
+              child: ListTile(
+                onTap: () => noteTap(index),
+                onLongPress: () => showBottom(index),
                 title: Container(
                   height: 100,
                   margin: const EdgeInsets.only(bottom: 5),
@@ -649,35 +657,44 @@ class _MyHomePageState extends State<MyHomePage> {
                   child: Column(
                     children: [
                       Text(notes[index].title,
-                          style: Theme.of(context).textTheme.bodyText2
+                        style: Theme.of(context).textTheme.bodyText2,
                       ),
-                      Text(
-                        timestampFormat(index),
+                      Text(timeFormat(index),
                         style: Theme.of(context).textTheme.bodyText2,
                       ),
                     ],
                   ),
                 ),
-              );
-            },
-          ) :
-          ListView.builder(
-            itemCount: notes.length,
-            itemBuilder: (BuildContext context, int index) {
-              return ListTile(
-                onTap: () {
-                  noteTap(index);
-                },
-                onLongPress: () {
-                  showBottom(index);
-                },
+              ),
+            );
+          },
+        ),
+      ) :
+      NotificationListener<UserScrollNotification>(
+        onNotification: (notification) {
+          if(notification.direction == ScrollDirection.forward) {
+            if(!isFabVisible) setState(() => isFabVisible = true);
+          }
+          else if(notification.direction == ScrollDirection.reverse) {
+            if(isFabVisible) setState(() => isFabVisible = false);
+          }
+          return true;
+          },
+        child: ListView.builder(
+          padding: const EdgeInsets.only(top: 5, bottom: 5),
+          itemCount: notes.length,
+          itemBuilder: (BuildContext context, int index) {
+            return Card(
+              child: ListTile(
+                onTap: () => noteTap(index),
+                onLongPress: () => showBottom(index),
                 title: SizedBox(
                   height: 100,
                   child: Row(
                     children: [
                       Container(
                         width: 85,
-                        height: 85,
+                        height: 100,
                         margin: const EdgeInsets.only(right: 25),
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(5),
@@ -688,27 +705,38 @@ class _MyHomePageState extends State<MyHomePage> {
                         ),
                       ),
                       Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Text(notes[index].title,
-                              style: Theme.of(context).textTheme.bodyText2
+                            style: Theme.of(context).textTheme.bodyText2,
                           ),
-                          Text(
-                            timestampFormat(index),
+                          Text(timeFormat(index),
                             style: Theme.of(context).textTheme.bodyText2,
                           ),
                         ],
                       ),
                       const Spacer(),
-                      Icon(notes[index].favorite == 'yes' ? Icons.star : Icons.star_border),
+                      IconButton(
+                        icon: const Icon(Icons.delete),
+                        onPressed: () => deleteNote(index),
+                      ),
+                      IconButton(
+                        icon: Icon(notes[index].favorite == 'yes' ? Icons.star : Icons.star_border),
+                        onPressed: () => toggleFavoriteNote(index),
+                      ),
                     ],
                   ),
                 ),
-              );
-            },
-          ),
-      floatingActionButton: SpeedDial(
+              ),
+            );
+          },
+        ),
+      ),
+      floatingActionButton: isFabVisible ?
+      SpeedDial(
         backgroundColor: Colors.blueGrey,
+        foregroundColor: Theme.of(context).cardColor,
         icon: Icons.create,
         children: [
           SpeedDialChild(
@@ -744,7 +772,7 @@ class _MyHomePageState extends State<MyHomePage> {
             foregroundColor: Theme.of(context).cardColor,
           ),
         ],
-      ),// This trailing comma makes auto-formatting nicer for build methods.
+      ) : null,
     );
   }
 }
