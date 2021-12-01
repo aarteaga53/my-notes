@@ -1,14 +1,15 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
-import 'note_list.dart';
+import 'note.dart';
 
 //ignore: must_be_immutable
 class TrashPage extends StatefulWidget {
   TrashPage(this.notes, this.trash, this.viewType, {Key? key}) : super(key: key);
 
-  List<NoteList> notes;
-  List<NoteList> trash;
+  List<Note> notes;
+  List<Note> trash;
   String viewType;
 
   @override
@@ -22,25 +23,22 @@ class _TrashPageState extends State<TrashPage> {
 
     String filepath = await getFilepath();
     final file = File('$filepath/trashList.txt');
-    file.writeAsStringSync('Trash List\n');
+    file.writeAsStringSync('Image Path,Folder Path,Title,Timestamp,Favorite\n');
 
     for (var element in widget.trash) {
-      file.writeAsStringSync(element.imagePath + '\n', mode: FileMode.append);
-      file.writeAsStringSync(element.pdfPath + '\n', mode: FileMode.append);
-      file.writeAsStringSync(element.title + '\n', mode: FileMode.append);
-      file.writeAsStringSync(element.timestamp.toString() + '\n', mode: FileMode.append);
-      file.writeAsStringSync(element.favorite + '\n', mode: FileMode.append);
+      file.writeAsStringSync(element.imagepath + ',' + element.folderpath + ',' +
+          element.title + ',' + element.timestamp.toString() + ',' + element.favorite + '\n',
+          mode:  FileMode.append
+      );
     }
     setState(() {
 
     });
   }
 
-  void deletePermanently(String pdfPath, String imagePath) async {
-    File file = File(pdfPath);
-    file.delete;
-    file = File(imagePath);
-    file.delete;
+  void deletePermanently(String folderpath, String imagepath) async {
+    Directory(folderpath).deleteSync(recursive: true);
+    File(imagepath).delete();
   }
 
   Future<String> getFilepath() async {
@@ -48,11 +46,21 @@ class _TrashPageState extends State<TrashPage> {
     return directory.path;
   }
 
+  void deleteNote(int index) {
+    deletePermanently(widget.trash[index].folderpath, widget.trash[index].imagepath);
+    widget.trash.removeAt(index);
+    saveTrashList();
+  }
+
+  void restoreNote(int index) {
+    widget.trash[index].timestamp = DateTime.now().millisecondsSinceEpoch;
+    widget.notes.add(widget.trash[index]);
+    widget.trash.removeAt(index);
+    saveTrashList();
+  }
+
   void showBottom(int index) {
     showModalBottomSheet(
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.only(topRight: Radius.circular(10), topLeft: Radius.circular(10))
-      ),
       context: context,
       builder: (BuildContext context) {
         return Row(
@@ -61,9 +69,7 @@ class _TrashPageState extends State<TrashPage> {
               flex: 50,
               child: TextButton(
                 onPressed: () {
-                  deletePermanently(widget.trash[index].pdfPath, widget.trash[index].imagePath);
-                  widget.trash.removeAt(index);
-                  saveTrashList();
+                  deleteNote(index);
                   Navigator.pop(context);
                 },
                 child: const Text('Delete',
@@ -77,10 +83,7 @@ class _TrashPageState extends State<TrashPage> {
               flex: 50,
               child: TextButton(
                 onPressed: () {
-                  widget.trash[index].timestamp = DateTime.now().millisecondsSinceEpoch;
-                  widget.notes.add(widget.trash[index]);
-                  widget.trash.removeAt(index);
-                  saveTrashList();
+                  restoreNote(index);
                   Navigator.pop(context);
                 },
                 child: const Text('Restore',
@@ -96,163 +99,191 @@ class _TrashPageState extends State<TrashPage> {
     );
   }
 
-  String timestampFormat(int index) {
+  String timeFormat(int index) {
     var time = DateTime.fromMillisecondsSinceEpoch(widget.trash[index].timestamp);
     var current = DateTime.now();
+
     if(time.day == current.day && time.year == current.year) {
-      if(time.hour > 12) {
-        return (time.hour - 12).toString() + ':' + time.minute.toString() + ' pm';
-      }
-      else {
-        return time.hour.toString() + ':' + time.minute.toString() + ' am';
-      }
+      return DateFormat('h:mm a').format(time);
     }
     else if(time.year == time.year) {
-      return time.month.toString() + '/' + time.day.toString();
+      return DateFormat.Md().format(time);
     }
     else {
-      return time.month.toString() + '/' + time.day.toString() + '/' + time.year.toString();
+      return DateFormat.yMd().format(time);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(75.0),
-        child: AppBar(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          iconTheme: IconThemeData(color: Theme.of(context).iconTheme.color),
-          title: Center(
-            child: Text(
-              'Trash',
-              style: Theme.of(context).textTheme.headline6,
+      body: CustomScrollView(
+        slivers: [
+          SliverAppBar(
+            backgroundColor: Colors.blueGrey,
+            iconTheme: IconThemeData(color: Theme.of(context).iconTheme.color),
+            title: Center(
+              child: Text(
+                'Trash',
+                style: Theme.of(context).textTheme.headline6,
+              ),
             ),
-          ),
-          bottom: PreferredSize(
-            preferredSize: const Size.fromHeight(10.0),
-            child: Text(
-              'Notes will be permanently deleted after 30 days.',
-              style: Theme.of(context).textTheme.bodyText2,
-            )
-          ),
-          actions: [
-            Center(
-              child: PopupMenuButton(
-                shape: const RoundedRectangleBorder(
-                  borderRadius: BorderRadius.all(
-                    Radius.circular(10)
-                  )
+            bottom: PreferredSize(
+                preferredSize: const Size.fromHeight(15),
+                child: Text(
+                  'Notes will be permanently deleted after 30 days.',
+                  style: Theme.of(context).textTheme.bodyText2,
+                )
+            ),
+            actions: [
+              Center(
+                child: PopupMenuButton(
+                  shape: const RoundedRectangleBorder(
+                      borderRadius: BorderRadius.all(
+                          Radius.circular(10)
+                      )
+                  ),
+                  icon: const Icon(Icons.more_vert),
+                  onSelected: (String? newValue){
+                    setState(() {
+                      if(newValue == 'Empty') {
+                        for(int i = widget.trash.length-1; i >= 0; i--) {
+                          deleteNote(i);
+                        }
+                      }
+                      else {
+                        for(int i = widget.trash.length-1; i >= 0; i--) {
+                          restoreNote(i);
+                        }
+                      }
+                    });
+                  },
+                  itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+                    const PopupMenuItem<String>(
+                      value: 'Restore',
+                      child: Text('Restore All'),
+                    ),
+                    const PopupMenuItem<String>(
+                      value: 'Empty',
+                      child: Text('Empty Trash'),
+                    ),
+                  ],
                 ),
-                icon: const Icon(Icons.more_vert),
-                onSelected: (String? newValue){
-                  setState(() {
-                    widget.viewType = newValue!;
-                  });
-                },
-                itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
-                  const PopupMenuItem<String>(
-                    value: 'Grid',
-                    child: Text('Grid'),
-                  ),
-                  const PopupMenuItem<String>(
-                    value: 'List',
-                    child: Text('List'),
-                  ),
-                ],
+              )
+            ],
+          ),
+          widget.viewType == 'Grid' ?
+          SliverPadding(
+            padding: const EdgeInsets.only(top: 5, bottom: 5),
+            sliver: SliverGrid(
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 3,
+                crossAxisSpacing: 5,
+                mainAxisSpacing: 25,
+                childAspectRatio: MediaQuery.of(context).size.width /
+                    (MediaQuery.of(context).size.height / 1.65),
               ),
-            )
-          ],
-        ),
-      ),
-      body: widget.viewType == 'Grid' ?
-      GridView.builder(
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 3,
-          crossAxisSpacing: 5,
-          mainAxisSpacing: 25,
-        ),
-        itemCount: widget.trash.length,
-        itemBuilder: (BuildContext context, int index) {
-          return ListTile(
-            onTap: () {
-
-            },
-            onLongPress: () {
-              showBottom(index);
-            },
-            title: Container(
-              height: 100,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(5),
-                image: DecorationImage(
-                  image: FileImage(File(widget.trash[index].imagePath)),
-                  fit: BoxFit.cover,
-                ),
-              ),
-            ),
-            subtitle: Center(
-              child: Column(
-                children: [
-                  Text(widget.trash[index].title,
-                      style: Theme.of(context).textTheme.bodyText2
-                  ),
-                  Text(
-                    timestampFormat(index),
-                    style: Theme.of(context).textTheme.bodyText2,
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-      ) :
-      ListView.builder(
-        itemCount: widget.trash.length,
-        itemBuilder: (BuildContext context, int index) {
-          return ListTile(
-            onTap: () {
-
-            },
-            onLongPress: () {
-              showBottom(index);
-            },
-            title: SizedBox(
-              height: 100,
-              child: Row(
-                children: [
-                  Container(
-                    width: 85,
-                    height: 85,
-                    margin: const EdgeInsets.only(right: 25),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(5),
-                      image: DecorationImage(
-                        image: FileImage(File(widget.trash[index].imagePath)),
-                        fit: BoxFit.cover,
+              delegate: SliverChildBuilderDelegate(
+                (context, index) {
+                  return Card(
+                    child: ListTile(
+                      onLongPress: () => showBottom(index),
+                      title: Container(
+                        height: 100,
+                        margin: const EdgeInsets.only(bottom: 5),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(5),
+                          image: DecorationImage(
+                            image: FileImage(File(widget.trash[index].imagepath)),
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      ),
+                      subtitle: Center(
+                        child: Column(
+                          children: [
+                            widget.trash[index].title.length <= 9 ? Text(widget.trash[index].title,
+                              style: Theme.of(context).textTheme.bodyText2,
+                            ) :
+                            Text(
+                              widget.trash[index].title.substring(0, 9) + '...',
+                              style: Theme.of(context).textTheme.bodyText2,
+                            ),
+                            Text(
+                              timeFormat(index),
+                              style: Theme.of(context).textTheme.bodyText2,
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                  Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(widget.trash[index].title,
-                          style: Theme.of(context).textTheme.bodyText2
-                      ),
-                      Text(
-                        timestampFormat(index),
-                        style: Theme.of(context).textTheme.bodyText2,
-                      ),
-                    ],
-                  ),
-                  const Spacer(),
-                  const Icon(Icons.star_border),
-                ],
+                  );
+                },
+                childCount: widget.trash.length,
               ),
             ),
-          );
-        },
+          ) :
+          SliverPadding(
+            padding: const EdgeInsets.only(top: 5, bottom: 5),
+            sliver: SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, index) {
+                  return Card(
+                    child: ListTile(
+                      onLongPress: () => showBottom(index),
+                      title: SizedBox(
+                        height: 100,
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 85,
+                              height: 85,
+                              margin: const EdgeInsets.only(right: 25),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(5),
+                                image: DecorationImage(
+                                  image: FileImage(File(widget.trash[index].imagepath)),
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
+                            ),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                widget.trash[index].title.length <= 15 ? Text(widget.trash[index].title,
+                                  style: Theme.of(context).textTheme.bodyText2,
+                                ) :
+                                Text(
+                                  widget.trash[index].title.substring(0, 15) + '...',
+                                  style: Theme.of(context).textTheme.bodyText2,
+                                ),
+                                Text(
+                                  timeFormat(index),
+                                  style: Theme.of(context).textTheme.bodyText2,
+                                ),
+                              ],
+                            ),
+                            const Spacer(),
+                            IconButton(
+                              onPressed: () => deleteNote(index),
+                              icon: const Icon(Icons.delete),
+                            ),
+                            IconButton(
+                              onPressed: () => restoreNote(index),
+                              icon: const Icon(Icons.restore_from_trash),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+                childCount: widget.trash.length,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

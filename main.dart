@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:camera/camera.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -9,9 +8,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:syncfusion_flutter_pdf/pdf.dart';
 import 'favorite_page.dart';
-import 'note_list.dart';
+import 'note.dart';
 import 'note_page.dart';
 import 'trash_page.dart';
 
@@ -48,10 +46,10 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
 
-  List<NoteList> notes = <NoteList>[];
-  List<NoteList> trash = <NoteList>[];
-  List<NoteList> favorites = <NoteList>[];
-  int noteCounter = 0;
+  List<Note> notes = <Note>[];
+  List<Note> trash = <Note>[];
+  List<Note> favorites = <Note>[];
+  int noteCounter = 1;
   String viewType = 'Grid';
   String sortType = 'Date';
   bool isFabVisible = true;
@@ -64,6 +62,24 @@ class _MyHomePageState extends State<MyHomePage> {
       loadNoteList();
       loadFavoriteList();
       loadTrashList();
+    });
+  }
+
+  /// Deletes all data and files to start new
+  void resetApp() async {
+    deleteAppDir();
+    deleteCacheDir();
+    noteCounter = 1;
+    viewType = 'Grid';
+    sortType = 'Date';
+    notes = <Note>[];
+    trash = <Note>[];
+    favorites = <Note>[];
+    saveNoteList();
+    saveTrashList();
+    saveFavoriteList();
+    setState(() {
+
     });
   }
 
@@ -83,26 +99,10 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
-  void resetApp() async {
-    deleteAppDir();
-    deleteCacheDir();
-    noteCounter = 0;
-    viewType = 'Grid';
-    sortType = 'Date';
-    notes = <NoteList>[];
-    trash = <NoteList>[];
-    favorites = <NoteList>[];
-    saveNoteList();
-    saveTrashList();
-    saveFavoriteList();
-    setState(() {
-
-    });
-  }
-
+  /// Loads the noteCounter, viewType, and sortType variables if they are saved
   void loadData() async {
     final prefs = await SharedPreferences.getInstance();
-    noteCounter = prefs.getInt('noteCounter') ?? 0;
+    noteCounter = prefs.getInt('noteCounter') ?? 1;
     viewType = prefs.getString('viewType') ?? 'Grid';
     sortType = prefs.getString('sortType') ?? 'Date';
     setState(() {
@@ -110,17 +110,20 @@ class _MyHomePageState extends State<MyHomePage> {
     });
   }
 
+  /// Reads a text file that contains data for the notes
+  /// Creates a new note from the data being read and adds
+  /// it to the notes variable
   void loadNoteList() async {
     String filepath = await getFilepath();
     if(File('$filepath/noteList.txt').existsSync()) {
       final file = File('$filepath/noteList.txt');
-      List<NoteList> temp = <NoteList>[];
+      List<Note> temp = <Note>[];
 
       List<String> lines = file.readAsLinesSync();
 
       for(int i = 1; i < lines.length; i++) {
         List line = lines[i].split(',');
-        NoteList note = NoteList(line[0], line[1], line[2], int.parse(line[3]), line[4]);
+        Note note = Note(line[0], line[1], line[2], int.parse(line[3]), line[4]);
         temp.add(note);
       }
 
@@ -130,17 +133,20 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
+  /// Reads a text file that contains data for the notes
+  /// Creates a new note from the data being read and adds
+  /// it to the favorites variable
   void loadFavoriteList() async {
     String filepath = await getFilepath();
     if(File('$filepath/favoriteList.txt').existsSync()) {
       final file = File('$filepath/favoriteList.txt');
-      List<NoteList> temp = <NoteList>[];
+      List<Note> temp = <Note>[];
 
       List<String> lines = file.readAsLinesSync();
 
       for(int i = 1; i < lines.length; i++) {
         List line = lines[i].split(',');
-        NoteList note = NoteList(line[0], line[1], line[2], int.parse(line[3]), line[4]);
+        Note note = Note(line[0], line[1], line[2], int.parse(line[3]), line[4]);
         temp.add(note);
       }
 
@@ -150,26 +156,38 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
+  /// Reads a text file that contains data for the notes
+  /// Creates a new note from the data being read and adds
+  /// it to the trash variable
   void loadTrashList() async {
     String filepath = await getFilepath();
     if(File('$filepath/trashList.txt').existsSync()) {
       final file = File('$filepath/trashList.txt');
-      List<NoteList> temp = <NoteList>[];
+      List<Note> temp = <Note>[];
 
       List<String> lines = file.readAsLinesSync();
 
       for(int i = 1; i < lines.length; i++) {
         List line = lines[i].split(',');
-        NoteList note = NoteList(line[0], line[1], line[2], int.parse(line[3]), line[4]);
-        temp.add(note);
+        var date = DateTime.fromMillisecondsSinceEpoch(int.parse(line[3])).add(const Duration(days: 30));
+        var now = DateTime.now();
+        if(date.isAfter(now)) {
+          Note note = Note(line[0], line[1], line[2], int.parse(line[3]), line[4]);
+          temp.add(note);
+        }
+        else {
+          deletePermanently(line[1], line[0]);
+        }
       }
 
+      saveTrashList();
       setState(() {
         trash = temp;
       });
     }
   }
 
+  /// Increments the note counter and saves the value
   void incrementNoteCounter() async {
     final prefs = await SharedPreferences.getInstance();
     noteCounter++;
@@ -179,6 +197,7 @@ class _MyHomePageState extends State<MyHomePage> {
     });
   }
 
+  /// Saves the value in the viewType variable
   void setViewType() async {
     final prefs = await SharedPreferences.getInstance();
     prefs.setString('viewType', viewType);
@@ -187,27 +206,30 @@ class _MyHomePageState extends State<MyHomePage> {
     });
   }
 
+  /// Saves the value in the sortType variable
+  /// Sorts the data according to the sortType
   void setSortType() async {
     final prefs = await SharedPreferences.getInstance();
     prefs.setString('sortType', sortType);
     setState(() {
       if(sortType == 'Date') {
-        sortDate();
+        notes.sort((a, b) => b.timestamp.compareTo(a.timestamp));
       }
-      else {
-        sortTitle();
+      else if(sortType == 'Title') {
+        notes.sort((a, b) => a.title.compareTo(b.title));
       }
     });
   }
 
+  /// Saves the notes variable into a text file
   void saveNoteList() async {
     setSortType();
     String filepath = await getFilepath();
     final file = File('$filepath/noteList.txt');
-    file.writeAsStringSync('Image Path,Pdf Path,Title,Timestamp,Favorite\n');
+    file.writeAsStringSync('Image Path,Folder Path,Title,Timestamp,Favorite\n');
 
     for (var element in notes) {
-      file.writeAsStringSync(element.imagePath + ',' + element.pdfPath + ',' +
+      file.writeAsStringSync(element.imagepath + ',' + element.folderpath + ',' +
           element.title + ',' + element.timestamp.toString() + ',' + element.favorite + '\n',
           mode:  FileMode.append
       );
@@ -217,15 +239,16 @@ class _MyHomePageState extends State<MyHomePage> {
     });
   }
 
+  /// Saves the favorites variable into a text file
   void saveFavoriteList() async {
     favorites.sort((a, b) => b.timestamp.compareTo(a.timestamp));
 
     String filepath = await getFilepath();
     final file = File('$filepath/favoriteList.txt');
-    file.writeAsStringSync('Image Path,Pdf Path,Title,Timestamp,Favorite\n');
+    file.writeAsStringSync('Image Path,Folder Path,Title,Timestamp,Favorite\n');
 
     for (var element in favorites) {
-      file.writeAsStringSync(element.imagePath + ',' + element.pdfPath + ',' +
+      file.writeAsStringSync(element.imagepath + ',' + element.folderpath + ',' +
           element.title + ',' + element.timestamp.toString() + ',' + element.favorite + '\n',
           mode:  FileMode.append
       );
@@ -236,15 +259,16 @@ class _MyHomePageState extends State<MyHomePage> {
     });
   }
 
+  /// Saves the trash variable into a text file
   void saveTrashList() async {
     trash.sort((a, b) => b.timestamp.compareTo(a.timestamp));
 
     String filepath = await getFilepath();
     final file = File('$filepath/trashList.txt');
-    file.writeAsStringSync('Image Path,Pdf Path,Title,Timestamp,Favorite\n');
+    file.writeAsStringSync('Image Path,Folder Path,Title,Timestamp,Favorite\n');
 
     for (var element in trash) {
-      file.writeAsStringSync(element.imagePath + ',' + element.pdfPath + ',' +
+      file.writeAsStringSync(element.imagepath + ',' + element.folderpath + ',' +
           element.title + ',' + element.timestamp.toString() + ',' + element.favorite + '\n',
           mode:  FileMode.append
       );
@@ -254,60 +278,51 @@ class _MyHomePageState extends State<MyHomePage> {
     });
   }
 
+  /// Gets the path to the app's directory
   Future<String> getFilepath() async {
     final directory = await getApplicationDocumentsDirectory();
     return directory.path;
   }
 
-  void createPDF(File picture) async {
-    PdfDocument document = PdfDocument();
-    Uint8List imageData = picture.readAsBytesSync();
-    PdfBitmap image = PdfBitmap(imageData);
-    document.pageSettings.margins.all = 0;
-    PdfPage page = document.pages.add();
-
-    page.graphics.drawImage(
-      image,
-      Rect.fromLTWH(0, 0, page.getClientSize().width, page.getClientSize().height),
-    );
-
-    savePDF(document, picture);
-  }
-
-  void savePDF(PdfDocument document, File picture) async {
+  /// Creates a new directory to store a set of notes in
+  Future<void> createDirectory(File picture) async {
     String filepath = await getFilepath();
-    String filename = filepath + '/note' + noteCounter.toString() + '.pdf';
-    final file = File(filename);
-    file.writeAsBytes(document.save());
-    document.dispose();
-
-    createImage(filepath, picture);
-    createNote(filepath, filename);
+    String folderpath = '$filepath/note$noteCounter/';
+    if(Directory(folderpath).existsSync()) {
+      final dir = Directory(folderpath);
+      dir.deleteSync(recursive: true);
+    }
+    Directory folder = await Directory(folderpath).create(recursive: true);
+    createNote(folder.path, picture);
   }
 
-  void createImage(String filepath, File picture) {
-    final file = File(filepath + '/note_image' + noteCounter.toString() + '.jpeg');
+  /// Creates a new note with properties
+  void createNote(String folderpath, File picture) {
+    var timestamp = DateTime.now().microsecondsSinceEpoch;
+    final file = File('$folderpath/$timestamp.jpeg');
     file.writeAsBytes(picture.readAsBytesSync());
-  }
 
-  void createNote(String filepath, String filename) {
-    var timestamp = DateTime.now().millisecondsSinceEpoch;
-    NoteList note = NoteList(
-      filepath + '/note_image' + noteCounter.toString() + '.jpeg',
-      filename,
-      'Note' + noteCounter.toString(),
-      timestamp,
+    Note note = Note(
+      file.path,
+      folderpath,
+      'Note$noteCounter',
+      DateTime.now().millisecondsSinceEpoch,
       'no',
     );
     notes.add(note);
     saveNoteList();
   }
 
+  /// Deletes a note, first removes it from the favorites list if in there
+  /// then updates the timestamp and adds it to the trash, finally removes
+  /// it from the notes list
+  /// Saves all three lists
   void deleteNote(int index) {
     if(notes[index].favorite == 'yes') {
-      favorites.removeWhere((element) => element.imagePath == notes[index].imagePath);
+      favorites.removeWhere((element) => element.folderpath == notes[index].folderpath);
       notes[index].favorite = 'no';
     }
+
     notes[index].timestamp = DateTime.now().millisecondsSinceEpoch;
     trash.add(notes[index]);
     notes.removeAt(index);
@@ -316,39 +331,32 @@ class _MyHomePageState extends State<MyHomePage> {
     saveTrashList();
   }
 
-  void deletePermanently(String pdfPath, String imagePath) async {
-    File file = File(pdfPath);
-    file.delete;
-    file = File(imagePath);
-    file.delete;
+  /// Deletes the image and pdf files of a note
+  void deletePermanently(String folderpath, String imagepath) {
+   Directory(folderpath).deleteSync(recursive: true);
+   File(imagepath).delete;
   }
 
+  /// Changes a note's favorite property and adds or
+  /// removes from the favorite list accordingly
+  /// Then saves the notes list and favorites list
   void toggleFavoriteNote(int index) {
     if(notes[index].favorite == 'no') {
       notes[index].favorite = 'yes';
       favorites.add(notes[index]);
     }
-    else {
-      favorites.removeWhere((element) => element.imagePath == notes[index].imagePath);
+    else if(notes[index].favorite == 'yes') {
+      favorites.removeWhere((element) => element.imagepath == notes[index].imagepath);
       notes[index].favorite = 'no';
     }
+
     saveNoteList();
     saveFavoriteList();
   }
 
-  void sortDate() {
-    notes.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-  }
-
-  void sortTitle() {
-    notes.sort((a, b) => a.title.compareTo(b.title));
-  }
-
+  /// Widget that displays the Modal Bottom Sheet
   void showBottom(int index) {
     showModalBottomSheet(
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.only(topRight: Radius.circular(10), topLeft: Radius.circular(10)),
-      ),
       context: context,
       builder: (BuildContext context) {
         return Row(
@@ -393,16 +401,30 @@ class _MyHomePageState extends State<MyHomePage> {
     );
   }
 
+  /// Goes into the note page when a note is tapped
   void noteTap(int index) async {
     await Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => NotePage(notes[index])),
     );
+    if(!Directory(notes[index].folderpath).existsSync()) {
+      if(notes[index].favorite == 'yes') {
+        favorites.removeWhere((element) => element.folderpath == notes[index].folderpath);
+        notes[index].favorite = 'no';
+        saveFavoriteList();
+      }
+      notes.removeAt(index);
+    }
+    else {
+      if(notes[index].favorite == 'yes') {
+          favorites[favorites.indexWhere((element) => element.folderpath == notes[index].folderpath)] = notes[index];
+          saveFavoriteList();
+      }
+    }
     saveNoteList();
-    favorites[favorites.indexWhere((element) => element.imagePath == notes[index].imagePath)] = notes[index];
-    saveFavoriteList();
   }
 
+  /// Handles how the date will be displayed on the note
   String timeFormat(int index) {
     var time = DateTime.fromMillisecondsSinceEpoch(notes[index].timestamp);
     var current = DateTime.now();
@@ -410,7 +432,7 @@ class _MyHomePageState extends State<MyHomePage> {
     if(time.day == current.day && time.year == current.year) {
       return DateFormat('h:mm a').format(time);
     }
-    if(time.year == time.year) {
+    else if(time.year == time.year) {
       return DateFormat.Md().format(time);
     }
     else {
@@ -422,7 +444,7 @@ class _MyHomePageState extends State<MyHomePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       drawer: SizedBox(
-        width: MediaQuery.of(context).size.width * 0.5,
+        width: MediaQuery.of(context).size.width * 0.75,
         child: Drawer(
           child: ListView(
             padding: EdgeInsets.zero,
@@ -534,90 +556,7 @@ class _MyHomePageState extends State<MyHomePage> {
           )
         ),
       ),
-      appBar: AppBar(
-        backgroundColor: Colors.blueGrey,
-        iconTheme: IconThemeData(color: Theme.of(context).iconTheme.color),
-        title: Center(
-          child: Text(
-            widget.title,
-            style: Theme.of(context).textTheme.headline6,
-          ),
-        ),
-        actions: [
-          Center(
-            child: PopupMenuButton<String>(
-              shape: const RoundedRectangleBorder(
-                borderRadius: BorderRadius.all(
-                  Radius.circular(10),
-                ),
-              ),
-              icon: const Icon(Icons.more_vert),
-              itemBuilder: (context) {
-                return ['Sort', 'View'].map((String value) {
-                  return PopupMenuItem(
-                    value: value,
-                    child: Text(value),
-                  );
-                }).toList();
-              },
-              onSelected: (String? newValue) {
-                setState(() {
-                  if(newValue == 'Sort') {
-                    showMenu<String>(
-                      shape: const RoundedRectangleBorder(
-                        borderRadius: BorderRadius.all(
-                          Radius.circular(10),
-                        ),
-                      ),
-                      context: context,
-                      position: const RelativeRect.fromLTRB(100, 0, 0, 0),
-                      items: ['Date', 'Title'].map((String sortValue) {
-                        return PopupMenuItem<String>(
-                          value: sortValue,
-                          child: Text(sortValue),
-                        );
-                      }).toList(),
-                    ).then((String? value) {
-                      if(value != null) {
-                        setState(() {
-                          sortType = value;
-                          setSortType();
-                        });
-                      }
-                    });
-                  }
-                  else {
-                    showMenu<String>(
-                      shape: const RoundedRectangleBorder(
-                          borderRadius: BorderRadius.all(
-                              Radius.circular(10)
-                          )
-                      ),
-                      context: context,
-                      position: const RelativeRect.fromLTRB(100, 0, 0, 0),
-                      items: ['Grid', 'List'].map((String viewValue) {
-                        return PopupMenuItem<String>(
-                          value: viewValue,
-                          child: Text(viewValue),
-                        );
-                      }).toList(),
-                    ).then((String? value) {
-                      if(value != null) {
-                        setState(() {
-                          viewType = value;
-                          setViewType();
-                        });
-                      }
-                    });
-                  }
-                });
-              }
-            ),
-          ),
-        ],
-      ),
-      body: viewType == 'Grid' ?
-      NotificationListener<UserScrollNotification>(
+      body: NotificationListener<UserScrollNotification>(
         onNotification: (notification) {
           if(notification.direction == ScrollDirection.forward) {
             if(!isFabVisible) setState(() => isFabVisible = true);
@@ -625,112 +564,210 @@ class _MyHomePageState extends State<MyHomePage> {
           else if(notification.direction == ScrollDirection.reverse) {
             if(isFabVisible) setState(() => isFabVisible = false);
           }
+
           return true;
-          },
-        child: GridView.builder(
-          padding: const EdgeInsets.only(top: 5, bottom: 5),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 3,
-            crossAxisSpacing: 5,
-            mainAxisSpacing: 50,
-            childAspectRatio: MediaQuery.of(context).size.width /
-                (MediaQuery.of(context).size.height / 1.65),
+        },
+        child: CustomScrollView(
+          slivers: [
+            SliverAppBar(
+              backgroundColor: Colors.blueGrey,
+              iconTheme: IconThemeData(color: Theme.of(context).iconTheme.color),
+              floating: true,
+              title: Center(
+                child: Text(
+                  widget.title,
+                  style: Theme.of(context).textTheme.headline6,
+                ),
               ),
-          itemCount: notes.length,
-          itemBuilder: (BuildContext context, int index) {
-            return Card(
-              child: ListTile(
-                onTap: () => noteTap(index),
-                onLongPress: () => showBottom(index),
-                title: Container(
-                  height: 100,
-                  margin: const EdgeInsets.only(bottom: 5),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(5),
-                    image: DecorationImage(
-                      image: FileImage(File(notes[index].imagePath)),
-                      fit: BoxFit.cover,
+              actions: [
+                Center(
+                  child: PopupMenuButton<String>(
+                    shape: const RoundedRectangleBorder(
+                      borderRadius: BorderRadius.all(
+                        Radius.circular(10),
+                      ),
                     ),
+                    icon: const Icon(Icons.more_vert),
+                    itemBuilder: (context) {
+                      return ['Sort', 'View'].map((String value) {
+                        return PopupMenuItem(
+                          value: value,
+                          child: Text(value),
+                        );
+                      }).toList();
+                    },
+                    onSelected: (String? newValue) {
+                      setState(() {
+                        if(newValue == 'Sort') {
+                          showMenu<String>(
+                            shape: const RoundedRectangleBorder(
+                              borderRadius: BorderRadius.all(
+                                Radius.circular(10),
+                              ),
+                            ),
+                            context: context,
+                            position: const RelativeRect.fromLTRB(100, 0, 0, 0),
+                            items: ['Date', 'Title'].map((String sortValue) {
+                              return PopupMenuItem<String>(
+                                value: sortValue,
+                                child: Text(sortValue),
+                              );
+                            }).toList(),
+                          ).then((String? value) {
+                            if(value != null) {
+                              setState(() {
+                                sortType = value;
+                                setSortType();
+                              });
+                            }
+                          });
+                        }
+                        else {
+                          showMenu<String>(
+                            shape: const RoundedRectangleBorder(
+                              borderRadius: BorderRadius.all(
+                                Radius.circular(10),
+                              ),
+                            ),
+                            context: context,
+                            position: const RelativeRect.fromLTRB(100, 0, 0, 0),
+                            items: ['Grid', 'List'].map((String viewValue) {
+                              return PopupMenuItem<String>(
+                                value: viewValue,
+                                child: Text(viewValue),
+                              );
+                            }).toList(),
+                          ).then((String? value) {
+                            if(value != null) {
+                              setState(() {
+                                viewType = value;
+                                setViewType();
+                              });
+                            }
+                          });
+                        }
+                      });
+                    },
                   ),
                 ),
-                subtitle: Center(
-                  child: Column(
-                    children: [
-                      Text(notes[index].title,
-                        style: Theme.of(context).textTheme.bodyText2,
-                      ),
-                      Text(timeFormat(index),
-                        style: Theme.of(context).textTheme.bodyText2,
-                      ),
-                    ],
-                  ),
+              ],
+            ),
+            //const SliverPadding(padding: EdgeInsets.only(top: 5)),
+            viewType == 'Grid' ?
+            SliverPadding(
+              padding: const EdgeInsets.only(top: 5, bottom: 5),
+              sliver: SliverGrid(
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 3,
+                  crossAxisSpacing: 5,
+                  mainAxisSpacing: 25,
+                  childAspectRatio: MediaQuery.of(context).size.width /
+                      (MediaQuery.of(context).size.height / 1.65),
                 ),
-              ),
-            );
-          },
-        ),
-      ) :
-      NotificationListener<UserScrollNotification>(
-        onNotification: (notification) {
-          if(notification.direction == ScrollDirection.forward) {
-            if(!isFabVisible) setState(() => isFabVisible = true);
-          }
-          else if(notification.direction == ScrollDirection.reverse) {
-            if(isFabVisible) setState(() => isFabVisible = false);
-          }
-          return true;
-          },
-        child: ListView.builder(
-          padding: const EdgeInsets.only(top: 5, bottom: 5),
-          itemCount: notes.length,
-          itemBuilder: (BuildContext context, int index) {
-            return Card(
-              child: ListTile(
-                onTap: () => noteTap(index),
-                onLongPress: () => showBottom(index),
-                title: SizedBox(
-                  height: 100,
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 85,
-                        height: 100,
-                        margin: const EdgeInsets.only(right: 25),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(5),
-                          image: DecorationImage(
-                            image: FileImage(File(notes[index].imagePath)),
-                            fit: BoxFit.cover,
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) {
+                    return Card(
+                      // child: GridTile(
+                      //   child: null,
+                      // ),
+                      child: ListTile(
+                        onTap: () => noteTap(index),
+                        onLongPress: () => showBottom(index),
+                        title: Container(
+                          height: 100,
+                          margin: const EdgeInsets.only(bottom: 5),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(5),
+                            image: DecorationImage(
+                              image: FileImage(File(notes[index].imagepath)),
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                        ),
+                        subtitle: Center(
+                          child: Column(
+                            children: [
+                              notes[index].title.length <= 9 ? Text(notes[index].title,
+                                style: Theme.of(context).textTheme.bodyText2,
+                              ) :
+                              Text(
+                                notes[index].title.substring(0, 9) + '...',
+                                style: Theme.of(context).textTheme.bodyText2,
+                              ),
+                              Text(timeFormat(index),
+                                style: Theme.of(context).textTheme.bodyText2,
+                              ),
+                            ],
                           ),
                         ),
                       ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(notes[index].title,
-                            style: Theme.of(context).textTheme.bodyText2,
-                          ),
-                          Text(timeFormat(index),
-                            style: Theme.of(context).textTheme.bodyText2,
-                          ),
-                        ],
-                      ),
-                      const Spacer(),
-                      IconButton(
-                        icon: const Icon(Icons.delete),
-                        onPressed: () => deleteNote(index),
-                      ),
-                      IconButton(
-                        icon: Icon(notes[index].favorite == 'yes' ? Icons.star : Icons.star_border),
-                        onPressed: () => toggleFavoriteNote(index),
-                      ),
-                    ],
-                  ),
+                    );
+                  },
+                  childCount: notes.length,
                 ),
               ),
-            );
-          },
+            ) :
+            SliverPadding(
+              padding: const EdgeInsets.only(top: 5, bottom: 5),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) {
+                    return Card(
+                      child: ListTile(
+                        onTap: () => noteTap(index),
+                        onLongPress: () => showBottom(index),
+                        title: SizedBox(
+                          height: 100,
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 85,
+                                height: 100,
+                                margin: const EdgeInsets.only(right: 25),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(5),
+                                  image: DecorationImage(
+                                    image: FileImage(File(notes[index].imagepath)),
+                                    fit: BoxFit.cover,
+                                  ),
+                                ),
+                              ),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  notes[index].title.length <= 15 ? Text(notes[index].title,
+                                    style: Theme.of(context).textTheme.bodyText2,
+                                  ) :
+                                  Text(
+                                    notes[index].title.substring(0, 15) + '...',
+                                    style: Theme.of(context).textTheme.bodyText2,
+                                  ),
+                                  Text(timeFormat(index),
+                                    style: Theme.of(context).textTheme.bodyText2,
+                                  ),
+                                ],
+                              ),
+                              const Spacer(),
+                              IconButton(
+                                icon: const Icon(Icons.delete),
+                                onPressed: () => deleteNote(index),
+                              ),
+                              IconButton(
+                                icon: Icon(notes[index].favorite == 'yes' ? Icons.star : Icons.star_border),
+                                onPressed: () => toggleFavoriteNote(index),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                  childCount: notes.length,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
       floatingActionButton: isFabVisible ?
@@ -746,8 +783,7 @@ class _MyHomePageState extends State<MyHomePage> {
               );
 
               final pictureFile = File(picture!.path);
-
-              createPDF(pictureFile);
+              await createDirectory(pictureFile);
               incrementNoteCounter();
             },
             label: 'Take Picture',
@@ -762,8 +798,7 @@ class _MyHomePageState extends State<MyHomePage> {
               );
 
               final imageFile = File(image!.path);
-
-              createPDF(imageFile);
+              await createDirectory(imageFile);
               incrementNoteCounter();
             },
             label: 'Add Image',
